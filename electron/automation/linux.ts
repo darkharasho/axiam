@@ -1,11 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process';
 import type { AutomationDeps } from './windows.js';
 
-export const LINUX_AUTOMATION_SCRIPT_VERSION = 'linux-autologin-v16';
+export const LINUX_AUTOMATION_SCRIPT_VERSION = 'linux-autologin-v17';
 const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_DELAY_MS = 4000;
 const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_RETRY_INTERVAL_MS = 1200;
 const DEFAULT_LINUX_AUTOMATION_LOOP_MAX_ITERATIONS = 360;
-const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_TAB_COUNT = 1;
+const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_TAB_COUNT = 0;
 const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_ANCHOR_X_PERCENT = 0.66;
 const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_ANCHOR_Y_PERCENT = 0.43;
 const DEFAULT_LINUX_AUTOMATION_CREDENTIAL_ANCHOR_X_PIXEL_OFFSET = -200;
@@ -67,7 +67,7 @@ export function startLinuxCredentialAutomation(
   );
   const resolvedCredentialTabCount = normalizeInteger(
     timingOptions?.credentialTabCount,
-    1,
+    0,
     30,
     DEFAULT_LINUX_AUTOMATION_CREDENTIAL_TAB_COUNT,
   );
@@ -126,6 +126,7 @@ last_activation_ms=0
 launcher_window_class=""
 launcher_window_name=""
 play_attempt_interval_ms=${DEFAULT_LINUX_AUTOMATION_PLAY_RETRY_INTERVAL_MS}
+last_email_verify_result="unknown"
 log_automation "timing credentialDelayMs=$credential_delay_after_window_detect_ms credentialRetryMs=$credential_attempt_interval_ms loopMaxIterations=$max_loop_iterations credentialTabs=$credential_tab_count maxCredentialAttempts=$max_credential_attempts"
 has_custom_play_click=0
 if [ -n "\${GW2_PLAY_X_PERCENT:-}" ] && [ -n "\${GW2_PLAY_Y_PERCENT:-}" ]; then
@@ -347,17 +348,26 @@ read_focused_input_text() {
 verify_email_field() {
   local expected="$1"
   local probe
+  last_email_verify_result="unknown"
   probe="$(read_focused_input_text)"
-  if [ "$probe" = "__GW2AM_NO_COPY__" ] || [ -z "$probe" ]; then
-    log_automation "input-verify-inconclusive reason=non-copyable-or-empty expectedLen=\${#expected}"
+  if [ "$probe" = "__GW2AM_NO_COPY__" ]; then
+    last_email_verify_result="non-copyable"
+    log_automation "input-verify-inconclusive reason=non-copyable expectedLen=\${#expected}"
+    return 0
+  fi
+  if [ -z "$probe" ]; then
+    last_email_verify_result="empty"
+    log_automation "input-verify-inconclusive reason=empty expectedLen=\${#expected}"
     return 0
   fi
   local expected_norm probe_norm
   expected_norm="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
   probe_norm="$(printf '%s' "$probe" | tr '[:upper:]' '[:lower:]')"
   if [ "$probe_norm" = "$expected_norm" ]; then
+    last_email_verify_result="matched"
     return 0
   fi
+  last_email_verify_result="mismatch"
   log_automation "input-verify-failed reason=mismatch expectedLen=\${#expected} actualLen=\${#probe}"
   return 1
 }
@@ -401,6 +411,18 @@ submit_gw2launcher_once() {
   sleep 0.15
   enter_text_strict "$GW2_EMAIL" || return 1
   verify_email_field "$GW2_EMAIL" || return 1
+  if [ "$last_email_verify_result" != "matched" ] && [ "$tabs" -gt 0 ] 2>/dev/null; then
+    local retry_tabs
+    retry_tabs=$((tabs - 1))
+    log_automation "email-anchor-retry tabs=$retry_tabs previousTabs=$tabs reason=$last_email_verify_result"
+    release_modifiers
+    click_client_point "$cx" "$cy" || return 1
+    send_tab_count "$retry_tabs" || return 1
+    log_automation "email-anchor tabs=$retry_tabs"
+    sleep 0.15
+    enter_text_strict "$GW2_EMAIL" || return 1
+    verify_email_field "$GW2_EMAIL" || return 1
+  fi
   sleep 0.18
   release_modifiers
   press_tab || return 1
