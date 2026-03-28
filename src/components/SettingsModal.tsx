@@ -359,7 +359,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                 Discord
                             </button>
                             <button
-                                onClick={() => { void window.api.openExternal('https://github.com/darkharasho/GW2AM'); }}
+                                onClick={() => { void window.api.openExternal('https://github.com/darkharasho/axiam'); }}
                                 className="px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)] transition-colors text-sm inline-flex items-center justify-center gap-2"
                                 title="Open GitHub"
                             >
