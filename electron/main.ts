@@ -12,8 +12,6 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { startWindowsCredentialAutomation as runWindowsCredentialAutomation } from './automation/windows.js';
-import { startLinuxCredentialAutomation as runLinuxCredentialAutomation, type LinuxAutomationTimingOptions } from './automation/linux.js';
 import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat } from './localDat.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,7 +29,6 @@ if (require('electron-squirrel-startup')) {
 let mainWindow: BrowserWindow | null = null;
 let masterKey: Buffer | null = null;
 let shutdownRequested = false;
-const automationPidsByAccount = new Map<string, Set<number>>();
 const launchStateMachine = new LaunchStateMachine();
 
 const SAFE_STORAGE_PREFIX = 'safe:';
@@ -323,51 +320,10 @@ function persistWindowState(immediate = false): void {
   }, 250);
 }
 
-function stopAutomationPid(pid: number): void {
-  if (!Number.isInteger(pid) || pid <= 0) return;
-  try {
-    if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8' });
-      return;
-    }
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    // ignore
-  }
-}
-
-function trackAutomationProcess(accountId: string, pid?: number): void {
-  if (!accountId || !pid || !Number.isInteger(pid) || pid <= 0) return;
-  const current = automationPidsByAccount.get(accountId) ?? new Set<number>();
-  current.add(pid);
-  automationPidsByAccount.set(accountId, current);
-}
-
-function stopAccountAutomation(accountId: string, reason = 'unspecified'): boolean {
-  const pids = automationPidsByAccount.get(accountId);
-  if (!pids || pids.size === 0) {
-    logMain('automation', `No tracked automation pids to stop for account=${accountId} reason=${reason}`);
-    return false;
-  }
-  logMain('automation', `Stopping automation for account=${accountId} reason=${reason} pids=${Array.from(pids).join(',')}`);
-  pids.forEach((pid) => stopAutomationPid(pid));
-  automationPidsByAccount.delete(accountId);
-  return true;
-}
-
-function stopAllAutomation(): void {
-  automationPidsByAccount.forEach((pids) => {
-    logMain('automation', `Stopping automation for all accounts pids=${Array.from(pids).join(',')}`);
-    pids.forEach((pid) => stopAutomationPid(pid));
-  });
-  automationPidsByAccount.clear();
-}
-
 function requestAppShutdown(source: string): void {
   if (shutdownRequested) return;
   shutdownRequested = true;
   console.log(`Shutdown requested via ${source}`);
-  stopAllAutomation();
   try {
     app.quit();
   } catch {
@@ -701,7 +657,7 @@ function getAccountMumbleName(accountId: string): string {
 }
 
 function stripManagedLaunchArguments(args: string[]): string[] {
-  const valueTakingFlags = new Set(['--mumble', '-mumble', '-email', '--email', '-password', '--password', '-provider', '--provider']);
+  const valueTakingFlags = new Set(['--mumble', '-mumble', '-provider', '--provider']);
   const standaloneFlags = new Set(['-autologin', '--autologin']);
   const cleaned: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
@@ -716,10 +672,6 @@ function stripManagedLaunchArguments(args: string[]): string[] {
     if (
       lowerArg.startsWith('--mumble=') ||
       lowerArg.startsWith('-mumble=') ||
-      lowerArg.startsWith('--email=') ||
-      lowerArg.startsWith('-email=') ||
-      lowerArg.startsWith('--password=') ||
-      lowerArg.startsWith('-password=') ||
       lowerArg.startsWith('--provider=') ||
       lowerArg.startsWith('-provider=')
     ) {
@@ -1111,7 +1063,6 @@ function stopRunningGw2Processes(): boolean {
 
 function stopAccountProcess(accountId: string): boolean {
   launchStateMachine.setState(accountId, 'stopping', 'verified', 'Stop requested');
-  stopAccountAutomation(accountId, 'stop-account-process');
   const mappedPids = getActiveAccountProcesses()
     .filter((processInfo) => processInfo.accountId === accountId)
     .map((processInfo) => processInfo.pid);
@@ -1201,35 +1152,6 @@ function shouldPromptMasterPassword(): boolean {
     return cadenceExpired;
   }
   return true;
-}
-
-// @ts-ignore - temporarily unused while testing Local.dat approach
-function startCredentialAutomation(
-  accountId: string,
-  pid: number,
-  email: string,
-  password: string,
-  bypassPortalPrompt = false,
-  playClickXPercent?: number,
-  playClickYPercent?: number,
-  linuxTimingOptions?: LinuxAutomationTimingOptions,
-): void {
-  logMain('automation', `Dispatch account=${accountId} platform=${process.platform} pid=${pid}`);
-  const deps = {
-    logMain,
-    logMainWarn,
-    logMainError,
-    trackAutomationProcess,
-  };
-  if (process.platform === 'win32') {
-    runWindowsCredentialAutomation(accountId, pid, email, password, playClickXPercent, playClickYPercent, deps);
-    return;
-  }
-  if (process.platform === 'linux') {
-    runLinuxCredentialAutomation(accountId, pid, email, password, bypassPortalPrompt, playClickXPercent, playClickYPercent, linuxTimingOptions, deps);
-    return;
-  }
-  console.error(`Credential automation is not implemented for platform: ${process.platform}`);
 }
 
 function isLinuxRemoteDesktopPermissionConfigured(): boolean {
@@ -1518,10 +1440,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
-});
-
-app.on('before-quit', () => {
-  stopAllAutomation();
 });
 
 app.on('activate', () => {
@@ -1991,7 +1909,6 @@ ipcMain.handle('launch-account', async (_, id) => {
       : 25000;
   const launched = await waitForAccountProcess(account.id, processWaitTimeoutMs);
   if (!launched) {
-    stopAccountAutomation(account.id, 'process-timeout');
     console.error(`GW2 did not appear as running for account ${account.nickname} within timeout.`);
     launchStateMachine.setState(id, 'errored', 'inferred', 'Process not detected before timeout');
   } else {
