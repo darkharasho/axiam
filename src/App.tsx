@@ -694,6 +694,7 @@ function App() {
             <div className="h-screen w-screen text-white flex flex-col">
                 <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
+                        <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
                         <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
                             <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
                         </span>
@@ -727,6 +728,7 @@ function App() {
                 {/* Custom Title Bar */}
                 <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
+                        <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
                         <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
                             <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
                         </span>
@@ -765,6 +767,7 @@ function App() {
             {/* Custom Title Bar */}
             <div className={`h-9 bg-[var(--theme-surface)] flex justify-between items-center px-3 select-none border-b relative z-10 ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                 <span className="text-sm font-bold text-[var(--theme-title)] flex items-center gap-2">
+                    <img src="img/AxiAM.png" alt="AxiAM" className="w-5 h-5 object-contain" />
                     <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
                         <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
                     </span>
