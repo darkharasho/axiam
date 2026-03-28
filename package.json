@@ -1,14 +1,14 @@
 {
-  "name": "gw2-account-manager",
+  "name": "axiam",
   "private": true,
   "version": "0.5.1",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev-entry.mjs",
-    "dev:update": "cross-env GW2AM_DEV_FAKE_UPDATE=1 GW2AM_DEV_FAKE_WHATS_NEW=1 npm run dev",
-    "dev:gw2_update": "cross-env GW2AM_DEV_FAKE_GW2_UPDATE=1 npm run dev",
-    "dev:showcase": "cross-env GW2AM_DEV_SHOWCASE=1 GW2AM_DEV_FAKE_WHATS_NEW=1 npm run dev",
+    "dev:update": "cross-env AXIAM_DEV_FAKE_UPDATE=1 AXIAM_DEV_FAKE_WHATS_NEW=1 npm run dev",
+    "dev:gw2_update": "cross-env AXIAM_DEV_FAKE_GW2_UPDATE=1 npm run dev",
+    "dev:showcase": "cross-env AXIAM_DEV_SHOWCASE=1 AXIAM_DEV_FAKE_WHATS_NEW=1 npm run dev",
     "dev:birthday": "cross-env VITE_FORCE_BIRTHDAY=1 npm run dev",
     "dev:web": "vite",
     "build": "tsc && vite build",
@@ -54,17 +54,17 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.gw2am.app",
-    "productName": "GW2 Account Manager",
+    "appId": "com.axiam.app",
+    "productName": "AxiAM",
     "directories": {
       "output": "dist_out",
       "buildResources": "build"
     },
-    "artifactName": "GW2AM-${version}-${os}-${arch}.${ext}",
+    "artifactName": "AxiAM-${version}-${os}-${arch}.${ext}",
     "publish": {
       "provider": "github",
       "owner": "darkharasho",
-      "repo": "GW2AM",
+      "repo": "axiam",
       "releaseType": "release"
     },
     "files": [
