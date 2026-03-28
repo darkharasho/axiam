@@ -399,12 +399,12 @@ function App() {
         };
     }, [isUnlocked]);
 
-    // Auto-save Local.dat when an account starts running and has no saved copy
+    // Auto-save Local.dat when an account stops running and has no saved copy
     const prevStatusesRef = useRef<Record<string, string>>({});
     useEffect(() => {
         const prev = prevStatusesRef.current;
         for (const [id, status] of Object.entries(accountStatuses)) {
-            if (status === 'running' && prev[id] !== 'running' && !accountHasLocalDat[id]) {
+            if (status === 'idle' && prev[id] === 'running' && !accountHasLocalDat[id]) {
                 handleSaveLogin(id);
             }
         }
