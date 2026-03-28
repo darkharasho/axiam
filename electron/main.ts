@@ -7,14 +7,14 @@ import log from 'electron-log';
 import electronUpdaterPkg from 'electron-updater';
 import store from './store.js';
 import type { Account, AppSettings } from './types.js';
-import { deriveKey, encrypt, decrypt, generateSalt } from './crypto.js';
+import { deriveKey, encrypt, generateSalt } from './crypto.js';
 import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { startWindowsCredentialAutomation as runWindowsCredentialAutomation } from './automation/windows.js';
 import { startLinuxCredentialAutomation as runLinuxCredentialAutomation, type LinuxAutomationTimingOptions } from './automation/linux.js';
-import { saveLocalDat, hasLocalDat, deleteLocalDat } from './localDat.js';
+import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat } from './localDat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1939,18 +1939,23 @@ ipcMain.handle('launch-account', async (_, id) => {
   const extraArgs = splitLaunchArguments(account.launchArguments);
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
-  const passwordForArgs = decrypt(account.passwordEncrypted, masterKey);
+
+  // Swap Local.dat if available — enables -autologin (no UI automation needed)
+  const hasAuth = restoreLocalDat(account.id);
+  if (hasAuth) {
+    logMain('launch', `[local-dat] Restored Local.dat for account=${id}, using -autologin`);
+  } else {
+    logMain('launch', `[local-dat] No saved Local.dat for account=${id}, launching without -autologin`);
+  }
+
   const args = [
     '--mumble', mumbleName,
-    '-email', account.email,
-    '-password', passwordForArgs,
-    '-autologin',
+    ...(hasAuth ? ['-autologin'] : []),
     ...sanitizedExtraArgs,
   ];
-  // let launchedPid = 0;
   try {
     if (gw2Path) {
-      console.log('Launching direct executable:', args.filter(a => a !== passwordForArgs).join(' '));
+      console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
       const child = spawn(gw2Path, args, {
@@ -1962,11 +1967,10 @@ ipcMain.handle('launch-account', async (_, id) => {
       child.on('error', (spawnError) => {
         console.error(`Spawn error: ${spawnError.message}`);
       });
-      // launchedPid = child.pid ?? 0;
       child.unref();
       launchStateMachine.setState(id, 'launcher_started', 'inferred', 'Direct executable launch signal sent');
     } else {
-      console.log('Launching via Steam:', args.filter(a => a !== passwordForArgs).join(' '));
+      console.log('Launching via Steam:', args.join(' '));
       logMain('launch', `Launching account=${id} via Steam with ${args.length} args`);
       launchViaSteam(args);
       launchStateMachine.setState(id, 'launcher_started', 'inferred', 'Steam launch signal sent');
@@ -1979,23 +1983,6 @@ ipcMain.handle('launch-account', async (_, id) => {
     launchStateMachine.setState(id, 'errored', 'verified', `${launchMode} launch failed`);
     return false;
   }
-  // Experimental: try passing credentials via command-line args
-  // If GW2 honours these, the launcher auto-fills and submits — no UI automation needed
-  logMain('launch', `[cli-auth] Injecting -email/-password/-autologin args for account=${id}`);
-
-  // UI automation disabled while testing CLI-arg / Local.dat approaches
-  // launchStateMachine.setState(id, 'credentials_waiting', 'inferred', 'Waiting before credential automation');
-  // logMain('launch', `Starting credential automation for account=${id}`);
-  // startCredentialAutomation(
-  //   account.id,
-  //   launchedPid,
-  //   account.email,
-  //   passwordForArgs,
-  //   false,
-  //   account.playClickXPercent,
-  //   account.playClickYPercent,
-  // );
-  // launchStateMachine.setState(id, 'credentials_submitted', 'inferred', 'Credential automation started');
 
   const processWaitTimeoutMs = process.platform === 'win32'
     ? 90000
