@@ -115,7 +115,7 @@ const trimmedPatch = filteredDiffPatch.length > maxPatchChars
   : filteredDiffPatch;
 
 const prompt = [
-  `Write friendly, non-technical release notes for the "GW2 Account Manager" app (v${version}).`,
+  `Write friendly, non-technical release notes for the "AxiAM" app (v${version}).`,
   `Use ONLY the commit summary and diff below; don't invent features.`,
   `Be concise and scannable for end users. Focus only on meaningful user-facing changes.`,
   `Prefer brevity over completeness. Omit minor/internal details.`,

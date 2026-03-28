@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const allowUnsigned = process.env.GW2AM_ALLOW_UNSIGNED_WINDOWS === '1';
+const allowUnsigned = process.env.AXIAM_ALLOW_UNSIGNED_WINDOWS === '1';
 const hasCscLink = Boolean(process.env.CSC_LINK && process.env.CSC_LINK.trim());
 const hasPassword = Boolean(
   (process.env.CSC_KEY_PASSWORD && process.env.CSC_KEY_PASSWORD.trim()) ||
@@ -9,7 +9,7 @@ const hasPassword = Boolean(
 
 if (allowUnsigned) {
   console.warn(
-    '[windows-signing] GW2AM_ALLOW_UNSIGNED_WINDOWS=1 set; skipping Windows signing checks. Artifacts are likely flagged by Smart App Control.'
+    '[windows-signing] AXIAM_ALLOW_UNSIGNED_WINDOWS=1 set; skipping Windows signing checks. Artifacts are likely flagged by Smart App Control.'
   );
   process.exit(0);
 }
@@ -20,7 +20,7 @@ if (!hasCscLink) {
     '[windows-signing] Set CSC_LINK to your code-signing certificate (.p12/.pfx file path, URL, or base64) before publishing Windows artifacts.'
   );
   console.error(
-    '[windows-signing] To bypass intentionally for testing only, set GW2AM_ALLOW_UNSIGNED_WINDOWS=1.'
+    '[windows-signing] To bypass intentionally for testing only, set AXIAM_ALLOW_UNSIGNED_WINDOWS=1.'
   );
   process.exit(1);
 }

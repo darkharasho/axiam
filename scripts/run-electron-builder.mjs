@@ -34,7 +34,7 @@ if (fs.existsSync(outputDir)) {
   fs.rmSync(outputDir, { recursive: true, force: true });
 }
 
-const buildAll = process.env.GW2AM_BUILD_ALL === '1';
+const buildAll = process.env.AXIAM_BUILD_ALL === '1';
 const platformArgs = buildAll
   ? ['--linux', '--win']
   : process.platform === 'win32'
