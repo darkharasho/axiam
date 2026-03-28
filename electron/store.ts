@@ -12,7 +12,8 @@ import { Account, AppSettings } from './types.js';
   const appData = app.getPath('appData');
   const oldDir = path.join(appData, 'GW2 Account Manager');
   const newDir = path.join(appData, 'AxiAM');
-  if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) {
+  const newConfigExists = fs.existsSync(path.join(newDir, 'config.json'));
+  if (fs.existsSync(oldDir) && !newConfigExists) {
     try {
       fs.cpSync(oldDir, newDir, { recursive: true });
       log.info('[Migration] Copied userData from "GW2 Account Manager" to AxiAM');
