@@ -82,10 +82,10 @@ function decryptFromStorage(stored: string): Buffer | null {
 }
 let persistWindowStateTimer: NodeJS.Timeout | null = null;
 let autoUpdateEnabled = false;
-const isDevFakeUpdate = process.env.GW2AM_DEV_FAKE_UPDATE === '1';
-const isDevFakeWhatsNew = process.env.GW2AM_DEV_FAKE_WHATS_NEW === '1' || isDevFakeUpdate;
-const isDevFakeGw2Update = process.env.GW2AM_DEV_FAKE_GW2_UPDATE === '1';
-const isDevShowcase = process.env.GW2AM_DEV_SHOWCASE === '1';
+const isDevFakeUpdate = process.env.AXIAM_DEV_FAKE_UPDATE === '1';
+const isDevFakeWhatsNew = process.env.AXIAM_DEV_FAKE_WHATS_NEW === '1' || isDevFakeUpdate;
+const isDevFakeGw2Update = process.env.AXIAM_DEV_FAKE_GW2_UPDATE === '1';
+const isDevShowcase = process.env.AXIAM_DEV_SHOWCASE === '1';
 let fakeUpdateTimer: NodeJS.Timeout | null = null;
 const showcaseActiveAccounts = new Set<string>(['showcase-a']);
 const showcaseAccounts = [
@@ -138,19 +138,19 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
 });
 
 function logMain(scope: string, message: string): void {
-  const line = `[GW2AM][Main][${scope}] ${message}`;
+  const line = `[AxiAM][Main][${scope}] ${message}`;
   console.log(line);
   log.info(line);
 }
 
 function logMainWarn(scope: string, message: string): void {
-  const line = `[GW2AM][Main][${scope}] ${message}`;
+  const line = `[AxiAM][Main][${scope}] ${message}`;
   console.warn(line);
   log.warn(line);
 }
 
 function logMainError(scope: string, message: string): void {
-  const line = `[GW2AM][Main][${scope}] ${message}`;
+  const line = `[AxiAM][Main][${scope}] ${message}`;
   console.error(line);
   log.error(line);
 }
@@ -209,9 +209,9 @@ function exportDiagnosticsBundle(): { success: boolean; path?: string; message: 
     const stamp = iso.replace(/[:.]/g, '-');
     const logsDir = path.join(app.getPath('userData'), 'logs');
     const mainLogPath = path.join(logsDir, 'main.log');
-    const diagnosticsDir = path.join(app.getPath('documents'), 'GW2AM-Diagnostics');
+    const diagnosticsDir = path.join(app.getPath('documents'), 'AxiAM-Diagnostics');
     fs.mkdirSync(diagnosticsDir, { recursive: true });
-    const outPath = path.join(diagnosticsDir, `gw2am-diagnostics-${stamp}.txt`);
+    const outPath = path.join(diagnosticsDir, `axiam-diagnostics-${stamp}.txt`);
 
     const settings = (store.get('settings') as AppSettings | undefined) || null;
     const accounts = ((store.get('accounts') as Account[] | undefined) || []);
@@ -219,7 +219,7 @@ function exportDiagnosticsBundle(): { success: boolean; path?: string; message: 
     const logTail = readFileTail(mainLogPath);
 
     const content = [
-      'GW2 Account Manager Diagnostics',
+      'AxiAM Diagnostics',
       `GeneratedAt: ${iso}`,
       '',
       'Runtime',
@@ -653,7 +653,7 @@ function splitLaunchArguments(launchArguments?: string): string[] {
 }
 
 function getAccountMumbleName(accountId: string): string {
-  return `gw2am_${accountId.replace(/-/g, '').toLowerCase()}`;
+  return `axiam_${accountId.replace(/-/g, '').toLowerCase()}`;
 }
 
 function stripManagedLaunchArguments(args: string[]): string[] {
@@ -1166,9 +1166,9 @@ function isLinuxRemoteDesktopPermissionConfigured(): boolean {
     appDisplayName,
     appDisplayNameCompact,
     appDisplayNameDashed,
-    'gw2am',
-    'com.gw2am',
-    'com.gw2am.app',
+    'axiam',
+    'com.axiam',
+    'com.axiam.app',
   ].filter(Boolean)));
   const flatpakAvailable = spawnSync('which', ['flatpak'], { encoding: 'utf8' }).status === 0;
   if (!flatpakAvailable) return false;
@@ -1217,16 +1217,16 @@ function configureLinuxRemoteDesktopPermissionBestEffort(): { success: boolean; 
     appDisplayName,
     appDisplayNameCompact,
     appDisplayNameDashed,
-    'gw2am',
-    'com.gw2am',
-    'com.gw2am.app',
+    'axiam',
+    'com.axiam',
+    'com.axiam.app',
   ].filter(Boolean)));
   const flatpakAvailable = spawnSync('which', ['flatpak'], { encoding: 'utf8' }).status === 0;
 
   if (!flatpakAvailable) {
     return {
       success: false,
-      message: 'flatpak is not available, so GW2AM cannot auto-configure xdg-desktop-portal permissions on this system.',
+      message: 'flatpak is not available, so AxiAM cannot auto-configure xdg-desktop-portal permissions on this system.',
     };
   }
 
@@ -1350,8 +1350,8 @@ function prewarmLinuxInputAuthorizationOnFirstOpen(): void {
 
 const createWindow = () => {
   const appIconPath = app.isPackaged
-    ? path.join(__dirname, '../dist/img/GW2AM-square.png')
-    : path.join(process.cwd(), 'public/img/GW2AM-square.png');
+    ? path.join(__dirname, '../dist/img/AxiAM-square.png')
+    : path.join(process.cwd(), 'public/img/AxiAM-square.png');
   const storedWindowState = getStoredWindowState();
 
   mainWindow = new BrowserWindow({
@@ -1407,7 +1407,7 @@ const createWindow = () => {
 app.on('ready', () => {
   console.log("User Data Path:", app.getPath('userData'));
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.gw2am.app');
+    app.setAppUserModelId('com.axiam.app');
   }
   createWindow();
   prewarmLinuxInputAuthorizationOnFirstOpen();
@@ -1493,13 +1493,13 @@ ipcMain.handle('get-whats-new', async () => {
     };
   }
   const tag = `v${version}`;
-  const releaseUrl = `https://api.github.com/repos/darkharasho/GW2AM/releases/tags/${tag}`;
+  const releaseUrl = `https://api.github.com/repos/darkharasho/axiam/releases/tags/${tag}`;
 
   try {
     const resp = await fetch(releaseUrl, {
       headers: {
         Accept: 'application/vnd.github+json',
-        'User-Agent': 'GW2AM-Updater',
+        'User-Agent': 'AxiAM-Updater',
       },
     });
     if (resp.ok) {
