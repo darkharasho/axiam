@@ -1,13 +1,11 @@
 import React from 'react';
 import { Account } from '../types';
-import { Loader2, Play, Save, Settings, Square } from 'lucide-react';
+import { Loader2, Play, Settings, Square } from 'lucide-react';
 
 interface AccountCardProps {
     account: Account;
     onLaunch: (id: string) => void;
     onStop: (id: string) => void;
-    onSaveLogin: (id: string) => void;
-    hasLocalDat: boolean;
     isActiveProcess: boolean;
     status: 'idle' | 'launching' | 'running' | 'stopping' | 'errored';
     statusCertainty?: 'verified' | 'inferred';
@@ -42,7 +40,7 @@ const BirthdayGiftIcon: React.FC = () => (
     </svg>
 );
 
-const AccountCard: React.FC<AccountCardProps> = ({ account, onLaunch, onStop, onSaveLogin, isActiveProcess, status, statusCertainty, accountApiName, isBirthday, hasLocalDat: hasAuth, onEdit }) => {
+const AccountCard: React.FC<AccountCardProps> = ({ account, onLaunch, onStop, isActiveProcess, status, statusCertainty, accountApiName, isBirthday, onEdit }) => {
     const effectiveStatus = (status === 'launching' || status === 'stopping' || status === 'errored')
         ? status
         : (isActiveProcess ? 'running' : status);
@@ -80,18 +78,6 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onLaunch, onStop, on
                     {launchInProgress
                         ? <Loader2 size={16} className="animate-spin" />
                         : (showStopControl ? <Square size={16} fill="currentColor" /> : <Play size={18} fill="currentColor" />)}
-                </button>
-                <button
-                    onClick={() => onSaveLogin(account.id)}
-                    className={`p-1.5 rounded-md transition-colors ${
-                        hasAuth
-                            ? 'bg-[var(--theme-active-ring)] text-[var(--theme-text)]'
-                            : 'bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)]'
-                    } disabled:opacity-60 disabled:cursor-not-allowed`}
-                    title={hasAuth ? 'Login saved — click to re-save' : 'Save Login (log in manually first)'}
-                    disabled={status === 'launching' || status === 'stopping'}
-                >
-                    <Save size={16} />
                 </button>
                 <button
                     onClick={() => onEdit(account)}

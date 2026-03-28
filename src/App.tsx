@@ -278,6 +278,16 @@ function App() {
         }
     };
 
+    const handleClearLogin = async (id: string) => {
+        try {
+            await window.api.deleteLocalDat(id);
+            setAccountHasLocalDat((prev) => ({ ...prev, [id]: false }));
+            showToast('Saved login cleared.');
+        } catch {
+            showToast('Failed to clear saved login.');
+        }
+    };
+
     const handleLinuxPrewarm = async () => {
         if (isLinuxPrewarmRunning) return;
         setIsLinuxPrewarmRunning(true);
@@ -388,6 +398,18 @@ function App() {
             window.clearInterval(timer);
         };
     }, [isUnlocked]);
+
+    // Auto-save Local.dat when an account starts running and has no saved copy
+    const prevStatusesRef = useRef<Record<string, string>>({});
+    useEffect(() => {
+        const prev = prevStatusesRef.current;
+        for (const [id, status] of Object.entries(accountStatuses)) {
+            if (status === 'running' && prev[id] !== 'running' && !accountHasLocalDat[id]) {
+                handleSaveLogin(id);
+            }
+        }
+        prevStatusesRef.current = { ...accountStatuses };
+    }, [accountStatuses]);
 
     useEffect(() => {
         if (!window.api) return;
@@ -803,8 +825,6 @@ function App() {
                             account={account}
                             onLaunch={handleLaunch}
                             onStop={handleStop}
-                            onSaveLogin={handleSaveLogin}
-                            hasLocalDat={accountHasLocalDat[account.id] ?? false}
                             isActiveProcess={activeAccountIds.includes(account.id)}
                             status={accountStatuses[account.id] ?? 'idle'}
                             statusCertainty={accountStatusCertainty[account.id]}
@@ -857,6 +877,9 @@ function App() {
                 }}
                 onSave={handleSaveAccount}
                 onDelete={handleDeleteAccount}
+                onResaveLogin={handleSaveLogin}
+                onClearLogin={handleClearLogin}
+                hasLocalDat={editingAccount ? (accountHasLocalDat[editingAccount.id] ?? false) : false}
                 initialData={editingAccount}
             />
 

@@ -7,10 +7,13 @@ interface AddAccountModalProps {
     onClose: () => void;
     onSave: (account: Omit<Account, 'id'>) => void;
     onDelete: (id: string) => Promise<void>;
+    onResaveLogin?: (id: string) => void;
+    onClearLogin?: (id: string) => void;
+    hasLocalDat?: boolean;
     initialData?: Account;
 }
 
-const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData }) => {
+const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSave, onDelete, onResaveLogin, onClearLogin, hasLocalDat, initialData }) => {
     const [nickname, setNickname] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -21,7 +24,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
     const sanitizeLaunchArguments = (raw: string): string => {
         if (!raw) return '';
         const tokens = raw.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-        const valueTakingFlags = new Set(['--mumble', '-mumble', '-email', '--email', '-password', '--password', '-provider', '--provider']);
+        const valueTakingFlags = new Set(['--mumble', '-mumble', '-email', '--email', '-password', '--password']);
         const standaloneFlags = new Set(['-autologin', '--autologin']);
         const cleaned: string[] = [];
 
@@ -39,9 +42,7 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
                 lower.startsWith('--email=') ||
                 lower.startsWith('-email=') ||
                 lower.startsWith('--password=') ||
-                lower.startsWith('-password=') ||
-                lower.startsWith('--provider=') ||
-                lower.startsWith('-provider=')
+                lower.startsWith('-password=')
             ) {
                 continue;
             }
@@ -181,6 +182,37 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
                     </div>
 
 
+
+                    {initialData && (
+                        <div className="mt-6 pt-4 border-t border-[var(--theme-border)]">
+                            <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-2">Saved Login</label>
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-[var(--theme-text)]">
+                                    {hasLocalDat ? 'Login data saved' : 'No saved login — log in manually with "Remember" checked, it will be saved automatically'}
+                                </span>
+                                <div className="flex gap-2 ml-auto shrink-0">
+                                    {hasLocalDat && onResaveLogin && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onResaveLogin(initialData.id)}
+                                            className="px-3 py-1.5 text-sm rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)] transition-colors"
+                                        >
+                                            Re-save
+                                        </button>
+                                    )}
+                                    {hasLocalDat && onClearLogin && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onClearLogin(initialData.id)}
+                                            className="px-3 py-1.5 text-sm rounded-lg bg-[var(--theme-danger-soft)] text-[var(--theme-danger-text)] hover:bg-[color-mix(in_srgb,var(--theme-danger-soft)_75%,transparent)] transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {initialData ? (
                         <div className="flex justify-between items-center mt-6 pt-4 border-t border-[var(--theme-border)]">
