@@ -1,5 +1,26 @@
 import Store from 'electron-store';
+import { app } from 'electron';
+import path from 'path';
+import fs from 'fs';
+import log from 'electron-log';
 import { Account, AppSettings } from './types.js';
+
+// ─── User data migration: GW2 Account Manager → AxiAM ──────────────────────
+// Must run before `new Store()` — electron-store derives its path from
+// app.getPath('userData'), which changed when productName became "AxiAM".
+{
+  const appData = app.getPath('appData');
+  const oldDir = path.join(appData, 'GW2 Account Manager');
+  const newDir = path.join(appData, 'AxiAM');
+  if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) {
+    try {
+      fs.cpSync(oldDir, newDir, { recursive: true });
+      log.info('[Migration] Copied userData from "GW2 Account Manager" to AxiAM');
+    } catch (err: any) {
+      log.warn('[Migration] Failed to copy userData:', err?.message || err);
+    }
+  }
+}
 
 interface StoreSchema {
     accounts: Account[];
@@ -26,7 +47,6 @@ const store = new Store<StoreSchema>({
             gw2Path: '',
             masterPasswordPrompt: 'every_time',
             themeId: 'blood_legion',
-            linuxInputAuthorizationPrewarmAttempted: false,
             gw2AutoUpdateBeforeLaunch: false,
             gw2AutoUpdateBackground: false,
             gw2AutoUpdateVisible: false,

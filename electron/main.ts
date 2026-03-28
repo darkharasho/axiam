@@ -26,6 +26,69 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+// ─── Migration: clean up stale updater cache from pre-rename installs ────────
+// If left behind, electron-updater can pick up the old cache and try to
+// unlink a non-existent AppImage path, blocking future updates.
+{
+  const cacheHome = process.env.XDG_CACHE_HOME || path.join(app.getPath('home'), '.cache');
+  const oldUpdaterCache = path.join(cacheHome, 'gw2-account-manager-updater');
+  if (fs.existsSync(oldUpdaterCache)) {
+    try {
+      fs.rmSync(oldUpdaterCache, { recursive: true });
+      log.info('[Migration] Removed stale gw2-account-manager-updater cache');
+    } catch (err: any) {
+      log.warn('[Migration] Failed to remove old updater cache:', err?.message || err);
+    }
+  }
+}
+
+// ─── Migration: rename AppImage/portable binary from GW2AM to AxiAM ─────────
+{
+  if (app.isPackaged) {
+    const legacyPrefix = 'GW2AM';
+    const newPrefix = 'AxiAM';
+
+    if (process.platform === 'linux') {
+      const appImagePath = process.env.APPIMAGE;
+      if (appImagePath) {
+        const baseName = path.basename(appImagePath);
+        if (baseName.startsWith(legacyPrefix) && !baseName.startsWith(newPrefix)) {
+          const newName = baseName.replace(legacyPrefix, newPrefix);
+          const targetPath = path.join(path.dirname(appImagePath), newName);
+          if (!fs.existsSync(targetPath)) {
+            try {
+              fs.copyFileSync(appImagePath, targetPath);
+              fs.chmodSync(targetPath, 0o755);
+              log.info(`[Migration] Created new AppImage name: ${targetPath}`);
+            } catch (err: any) {
+              log.warn(`[Migration] Failed to copy AppImage to new name: ${err?.message || err}`);
+            }
+          }
+        }
+      }
+    }
+
+    if (process.platform === 'win32') {
+      const portablePath = process.env.PORTABLE_EXECUTABLE;
+      if (portablePath) {
+        const baseName = path.basename(portablePath);
+        if (baseName.startsWith(legacyPrefix) && !baseName.startsWith(newPrefix)) {
+          const newName = baseName.replace(legacyPrefix, newPrefix);
+          const targetPath = path.join(path.dirname(portablePath), newName);
+          if (!fs.existsSync(targetPath)) {
+            try {
+              fs.copyFileSync(portablePath, targetPath);
+              log.info(`[Migration] Created new portable name: ${targetPath}`);
+            } catch (err: any) {
+              log.warn(`[Migration] Failed to copy portable exe to new name: ${err?.message || err}`);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 let mainWindow: BrowserWindow | null = null;
 let masterKey: Buffer | null = null;
 let shutdownRequested = false;
@@ -34,11 +97,9 @@ const launchStateMachine = new LaunchStateMachine();
 const SAFE_STORAGE_PREFIX = 'safe:';
 const STEAM_GW2_APP_ID = '1284210';
 const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
-const LINUX_PREWARM_REFOCUS_IDLE_MS = 60 * 60 * 1000;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
 const GW2_UPDATE_RECENT_REUSE_MS = 10 * 60 * 1000;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
-let linuxLastBlurAt = 0;
 let resolvedWindowsPowerShellPath: string | null = null;
 type Gw2UpdateMode = 'before_launch' | 'background' | 'manual';
 type Gw2UpdatePhase = 'idle' | 'queued' | 'starting' | 'running' | 'completed' | 'failed';
@@ -1152,202 +1213,6 @@ function shouldPromptMasterPassword(): boolean {
   return true;
 }
 
-function isLinuxRemoteDesktopPermissionConfigured(): boolean {
-  if (process.platform !== 'linux') return false;
-
-  const appName = path.basename(process.execPath).replace('.AppImage', '').toLowerCase();
-  const appDisplayName = (app.getName() || '').toLowerCase();
-  const appDisplayNameCompact = appDisplayName.replace(/[^a-z0-9.]+/g, '');
-  const appDisplayNameDashed = appDisplayName.replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
-  const flatpakId = String(process.env.FLATPAK_ID || '').toLowerCase().trim();
-  const appIds = Array.from(new Set([
-    flatpakId,
-    appName,
-    appDisplayName,
-    appDisplayNameCompact,
-    appDisplayNameDashed,
-    'axiam',
-    'com.axiam',
-    'com.axiam.app',
-  ].filter(Boolean)));
-  const flatpakAvailable = spawnSync('which', ['flatpak'], { encoding: 'utf8' }).status === 0;
-  if (!flatpakAvailable) return false;
-
-  try {
-    const permissions = spawnSync('flatpak', ['permissions', 'remote-desktop'], { encoding: 'utf8' });
-    if (permissions.status !== 0) return false;
-    const lines = String(permissions.stdout || '').split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('Table') || trimmed.startsWith('table')) continue;
-      const parts = trimmed.split(/\s+/);
-      if (parts.length < 4) continue;
-      const table = parts[0];
-      const id = parts[1];
-      const appId = parts[2]?.toLowerCase();
-      const permission = parts[3]?.toLowerCase();
-      if (
-        table === 'remote-desktop'
-        && id === 'remote-desktop'
-        && appIds.includes(appId)
-        && permission?.startsWith('yes')
-      ) {
-        return true;
-      }
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-function configureLinuxRemoteDesktopPermissionBestEffort(): { success: boolean; message: string } {
-  if (process.platform !== 'linux') {
-    return { success: false, message: 'Only available on Linux' };
-  }
-
-  const appName = path.basename(process.execPath).replace('.AppImage', '').toLowerCase();
-  const appDisplayName = (app.getName() || '').toLowerCase();
-  const appDisplayNameCompact = appDisplayName.replace(/[^a-z0-9.]+/g, '');
-  const appDisplayNameDashed = appDisplayName.replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
-  const flatpakId = String(process.env.FLATPAK_ID || '').toLowerCase().trim();
-  const appIds = Array.from(new Set([
-    flatpakId,
-    appName,
-    appDisplayName,
-    appDisplayNameCompact,
-    appDisplayNameDashed,
-    'axiam',
-    'com.axiam',
-    'com.axiam.app',
-  ].filter(Boolean)));
-  const flatpakAvailable = spawnSync('which', ['flatpak'], { encoding: 'utf8' }).status === 0;
-
-  if (!flatpakAvailable) {
-    return {
-      success: false,
-      message: 'flatpak is not available, so AxiAM cannot auto-configure xdg-desktop-portal permissions on this system.',
-    };
-  }
-
-  try {
-    let appliedCount = 0;
-    for (const appId of appIds) {
-      const setResult = spawnSync(
-        'flatpak',
-        ['permission-set', 'remote-desktop', 'remote-desktop', appId, 'yes'],
-        { encoding: 'utf8' },
-      );
-      if (setResult.status === 0) {
-        appliedCount += 1;
-      } else {
-        const stderr = String(setResult.stderr || '').trim();
-        logMainWarn('portal', `flatpak permission-set failed for appId=${appId}: ${stderr || 'unknown error'}`);
-      }
-    }
-
-    const configured = isLinuxRemoteDesktopPermissionConfigured();
-    if (configured) {
-      const portalServices = [
-        'xdg-desktop-portal.service',
-        'xdg-desktop-portal-kde.service',
-        'xdg-desktop-portal-gnome.service',
-      ];
-      for (const svc of portalServices) {
-        try {
-          spawnSync('systemctl', ['--user', 'restart', svc], { encoding: 'utf8' });
-        } catch {
-          // Optional best-effort restart.
-        }
-      }
-      return { success: true, message: `Configured via flatpak for ${appliedCount} app id(s)` };
-    }
-    return {
-      success: false,
-      message: `Applied ${appliedCount} candidate app id(s), but verification did not find an active allow rule.`,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { success: false, message: `Flatpak permission configuration failed: ${message}` };
-  }
-}
-
-async function triggerLinuxInputAuthorizationPrewarm(reason: 'startup' | 'refocus_idle' | 'manual'): Promise<{ success: boolean; message: string }> {
-  if (process.platform !== 'linux') {
-    return { success: false, message: 'Only available on Linux' };
-  }
-
-  const xdotoolCheck = spawnSync('which', ['xdotool'], { encoding: 'utf8' });
-  if (xdotoolCheck.status !== 0) {
-    const message = 'Skipping Linux input prewarm: xdotool is not installed.';
-    logMainWarn('portal', message);
-    return { success: false, message };
-  }
-
-  if (!isLinuxRemoteDesktopPermissionConfigured()) {
-    const configureResult = configureLinuxRemoteDesktopPermissionBestEffort();
-    if (configureResult.success) {
-      logMain('portal', `Auto-configured remote-desktop permissions before prewarm: ${configureResult.message}`);
-    } else {
-      logMainWarn('portal', `Prewarm auto-configure failed: ${configureResult.message}`);
-    }
-  }
-
-  const prewarmScript = `
-    win_id="$(xdotool search --onlyvisible --pid "${process.pid}" 2>/dev/null | head -n 1)"
-    if [ -z "$win_id" ]; then
-      win_id="$(xdotool getactivewindow 2>/dev/null || true)"
-    fi
-
-    if [ -z "$win_id" ]; then
-      exit 1
-    fi
-
-    xdotool windowactivate --sync "$win_id" 2>/dev/null || true
-    xdotool key --clearmodifiers --window "$win_id" a
-  `;
-
-  return await new Promise((resolve) => {
-    const child = spawn('/bin/bash', ['-c', prewarmScript], {
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stderrOutput = '';
-    let resolved = false;
-    child.stderr?.on('data', (chunk) => {
-      stderrOutput += String(chunk);
-    });
-    child.on('error', (error) => {
-      if (resolved) return;
-      resolved = true;
-      const message = `Linux input prewarm failed: ${error.message}`;
-      logMainWarn('portal', `${message} reason=${reason}`);
-      resolve({ success: false, message });
-    });
-    child.on('exit', (code) => {
-      if (resolved) return;
-      resolved = true;
-      if (code === 0) {
-        const message = 'Triggered Linux input authorization prewarm.';
-        logMain('portal', `${message} reason=${reason}`);
-        resolve({ success: true, message });
-        return;
-      }
-      const details = stderrOutput.trim();
-      const message = `Linux input prewarm exited with code=${code ?? 'null'}${details ? ` stderr=${details}` : ''}`;
-      logMainWarn('portal', `${message} reason=${reason}`);
-      resolve({ success: false, message });
-    });
-  });
-}
-
-function prewarmLinuxInputAuthorizationOnFirstOpen(): void {
-  if (process.platform !== 'linux') return;
-  setTimeout(() => {
-    void triggerLinuxInputAuthorizationPrewarm('startup');
-  }, 350);
-}
-
 const createWindow = () => {
   const appIconPath = app.isPackaged
     ? path.join(__dirname, '../dist/img/AxiAM-square.png')
@@ -1384,20 +1249,6 @@ const createWindow = () => {
   mainWindow.on('maximize', () => persistWindowState());
   mainWindow.on('unmaximize', () => persistWindowState());
   mainWindow.on('close', () => persistWindowState(true));
-  if (process.platform === 'linux') {
-    mainWindow.on('blur', () => {
-      linuxLastBlurAt = Date.now();
-    });
-    mainWindow.on('focus', () => {
-      if (!linuxLastBlurAt) return;
-      const idleMs = Date.now() - linuxLastBlurAt;
-      linuxLastBlurAt = 0;
-      if (idleMs < LINUX_PREWARM_REFOCUS_IDLE_MS) return;
-      setTimeout(() => {
-        void triggerLinuxInputAuthorizationPrewarm('refocus_idle');
-      }, 150);
-    });
-  }
 
   if (storedWindowState.isMaximized) {
     mainWindow.maximize();
@@ -1410,7 +1261,6 @@ app.on('ready', () => {
     app.setAppUserModelId('com.axiam.app');
   }
   createWindow();
-  prewarmLinuxInputAuthorizationOnFirstOpen();
   maybeStartBackgroundGw2Update('startup');
 
   const updateConfigPath = path.join(process.resourcesPath, 'app-update.yml');
@@ -1911,12 +1761,12 @@ ipcMain.handle('save-settings', async (_, settings) => {
     gw2Path?: string;
     masterPasswordPrompt?: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId?: string;
-    linuxInputAuthorizationPrewarmAttempted?: boolean;
     gw2AutoUpdateBeforeLaunch?: boolean;
     gw2AutoUpdateBackground?: boolean;
     gw2AutoUpdateVisible?: boolean;
   } | undefined) || {};
-  store.set('settings', { ...existingSettings, ...settings });
+  const { linuxInputAuthorizationPrewarmAttempted: _drop, ...cleanSettings } = existingSettings as Record<string, unknown>;
+  store.set('settings', { ...cleanSettings, ...settings });
   const mergedMode = (settings?.masterPasswordPrompt ?? existingSettings.masterPasswordPrompt ?? 'every_time');
   if (mergedMode !== 'every_time') {
     if (masterKey) {
@@ -1950,44 +1800,6 @@ ipcMain.handle('get-runtime-flags', async () => {
   return {
     isDevShowcase,
   };
-});
-
-ipcMain.handle('check-portal-permissions', async () => {
-  if (process.platform !== 'linux') {
-    return { configured: false, message: 'Only available on Linux' };
-  }
-  const flatpakAvailable = spawnSync('which', ['flatpak'], { encoding: 'utf8' }).status === 0;
-  if (!flatpakAvailable) {
-    return {
-      configured: false,
-      message: 'flatpak not found; cannot verify or auto-configure portal permissions on this system.',
-    };
-  }
-
-  try {
-    return isLinuxRemoteDesktopPermissionConfigured()
-      ? { configured: true, message: 'Portal permissions already configured' }
-      : { configured: false, message: 'Portal permissions not configured' };
-  } catch (error) {
-    return { configured: false, message: `Error checking permissions: ${error instanceof Error ? error.message : String(error)}` };
-  }
-});
-
-ipcMain.handle('configure-portal-permissions', async () => {
-  if (process.platform !== 'linux') {
-    return { success: false, message: 'Only available on Linux' };
-  }
-  const result = configureLinuxRemoteDesktopPermissionBestEffort();
-  if (result.success) {
-    logMain('portal', result.message);
-    return { success: true, message: result.message };
-  }
-  logMainWarn('portal', result.message);
-  return { success: false, message: result.message };
-});
-
-ipcMain.handle('prewarm-linux-input-authorization', async () => {
-  return triggerLinuxInputAuthorizationPrewarm('manual');
 });
 
 ipcMain.handle('get-gw2-update-status', async () => {

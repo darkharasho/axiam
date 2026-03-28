@@ -21,7 +21,6 @@ export interface AppSettings {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
-    linuxInputAuthorizationPrewarmAttempted?: boolean;
     gw2AutoUpdateBeforeLaunch?: boolean;
     gw2AutoUpdateBackground?: boolean;
     gw2AutoUpdateVisible?: boolean;
@@ -66,9 +65,6 @@ export type IpcEvents = {
     'open-external': (url: string) => Promise<boolean>;
     'export-diagnostics': () => Promise<{ success: boolean; path?: string; message: string }>;
     'reset-app': () => void;
-    'configure-portal-permissions': () => Promise<{ success: boolean; message: string }>;
-    'check-portal-permissions': () => Promise<{ configured: boolean; message: string }>;
-    'prewarm-linux-input-authorization': () => Promise<{ success: boolean; message: string }>;
     'get-gw2-update-status': () => Promise<Gw2UpdateStatus>;
     'start-gw2-update': (visible?: boolean) => Promise<boolean>;
     'save-local-dat': (accountId: string) => Promise<{ success: boolean; message: string }>;

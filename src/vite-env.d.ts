@@ -56,9 +56,6 @@ interface Api {
     maximizeWindow: () => void;
     closeWindow: () => void;
     resetApp: () => void;
-    configurePortalPermissions: () => Promise<{ success: boolean; message: string }>;
-    checkPortalPermissions: () => Promise<{ configured: boolean; message: string }>;
-    prewarmLinuxInputAuthorization: () => Promise<{ success: boolean; message: string }>;
     getGw2UpdateStatus: () => Promise<{
         phase: 'idle' | 'queued' | 'starting' | 'running' | 'completed' | 'failed';
         mode: 'before_launch' | 'background' | 'manual';

@@ -89,7 +89,8 @@
     "nsis": {
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
-      "differentialPackage": true
+      "differentialPackage": true,
+      "include": "build/installer.nsh"
     }
   }
 }
