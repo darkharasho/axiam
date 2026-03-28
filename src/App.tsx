@@ -696,7 +696,7 @@ function App() {
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
                         <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
                         <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
                         </span>
                         {showDevChrome ? (
                             <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
@@ -730,7 +730,7 @@ function App() {
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
                         <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
                         <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
                         </span>
                         {showDevChrome ? (
                             <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
@@ -769,7 +769,7 @@ function App() {
                 <span className="text-sm font-bold text-[var(--theme-title)] flex items-center gap-2">
                     <img src="img/AxiAM.png" alt="AxiAM" className="w-5 h-5 object-contain" />
                     <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
                     </span>
                     {showDevChrome ? (
                         <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
