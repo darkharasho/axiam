@@ -14,6 +14,7 @@ import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { startWindowsCredentialAutomation as runWindowsCredentialAutomation } from './automation/windows.js';
 import { startLinuxCredentialAutomation as runLinuxCredentialAutomation, type LinuxAutomationTimingOptions } from './automation/linux.js';
+import { saveLocalDat, hasLocalDat, deleteLocalDat } from './localDat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1202,6 +1203,7 @@ function shouldPromptMasterPassword(): boolean {
   return true;
 }
 
+// @ts-ignore - temporarily unused while testing Local.dat approach
 function startCredentialAutomation(
   accountId: string,
   pid: number,
@@ -1647,6 +1649,19 @@ ipcMain.handle('export-diagnostics', async () => {
   return exportDiagnosticsBundle();
 });
 
+ipcMain.handle('save-local-dat', async (_, accountId: string) => {
+  return saveLocalDat(accountId);
+});
+
+ipcMain.handle('has-local-dat', async (_, accountId: string) => {
+  return hasLocalDat(accountId);
+});
+
+ipcMain.handle('delete-local-dat', async (_, accountId: string) => {
+  deleteLocalDat(accountId);
+  return true;
+});
+
 // Security & Account Management
 ipcMain.handle('has-master-password', async () => {
   if (isDevShowcase) return true;
@@ -1924,11 +1939,18 @@ ipcMain.handle('launch-account', async (_, id) => {
   const extraArgs = splitLaunchArguments(account.launchArguments);
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
-  const args = ['--mumble', mumbleName, ...sanitizedExtraArgs];
-  let launchedPid = 0;
+  const passwordForArgs = decrypt(account.passwordEncrypted, masterKey);
+  const args = [
+    '--mumble', mumbleName,
+    '-email', account.email,
+    '-password', passwordForArgs,
+    '-autologin',
+    ...sanitizedExtraArgs,
+  ];
+  // let launchedPid = 0;
   try {
     if (gw2Path) {
-      console.log('Launching direct executable:', args.join(' '));
+      console.log('Launching direct executable:', args.filter(a => a !== passwordForArgs).join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
       const child = spawn(gw2Path, args, {
@@ -1940,11 +1962,11 @@ ipcMain.handle('launch-account', async (_, id) => {
       child.on('error', (spawnError) => {
         console.error(`Spawn error: ${spawnError.message}`);
       });
-      launchedPid = child.pid ?? 0;
+      // launchedPid = child.pid ?? 0;
       child.unref();
       launchStateMachine.setState(id, 'launcher_started', 'inferred', 'Direct executable launch signal sent');
     } else {
-      console.log('Launching via Steam:', args.join(' '));
+      console.log('Launching via Steam:', args.filter(a => a !== passwordForArgs).join(' '));
       logMain('launch', `Launching account=${id} via Steam with ${args.length} args`);
       launchViaSteam(args);
       launchStateMachine.setState(id, 'launcher_started', 'inferred', 'Steam launch signal sent');
@@ -1957,19 +1979,23 @@ ipcMain.handle('launch-account', async (_, id) => {
     launchStateMachine.setState(id, 'errored', 'verified', `${launchMode} launch failed`);
     return false;
   }
-  const password = decrypt(account.passwordEncrypted, masterKey);
-  launchStateMachine.setState(id, 'credentials_waiting', 'inferred', 'Waiting before credential automation');
-  logMain('launch', `Starting credential automation for account=${id}`);
-  startCredentialAutomation(
-    account.id,
-    launchedPid,
-    account.email,
-    password,
-    false,
-    account.playClickXPercent,
-    account.playClickYPercent,
-  );
-  launchStateMachine.setState(id, 'credentials_submitted', 'inferred', 'Credential automation started');
+  // Experimental: try passing credentials via command-line args
+  // If GW2 honours these, the launcher auto-fills and submits — no UI automation needed
+  logMain('launch', `[cli-auth] Injecting -email/-password/-autologin args for account=${id}`);
+
+  // UI automation disabled while testing CLI-arg / Local.dat approaches
+  // launchStateMachine.setState(id, 'credentials_waiting', 'inferred', 'Waiting before credential automation');
+  // logMain('launch', `Starting credential automation for account=${id}`);
+  // startCredentialAutomation(
+  //   account.id,
+  //   launchedPid,
+  //   account.email,
+  //   passwordForArgs,
+  //   false,
+  //   account.playClickXPercent,
+  //   account.playClickYPercent,
+  // );
+  // launchStateMachine.setState(id, 'credentials_submitted', 'inferred', 'Credential automation started');
 
   const processWaitTimeoutMs = process.platform === 'win32'
     ? 90000

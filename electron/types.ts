@@ -73,4 +73,7 @@ export type IpcEvents = {
     'prewarm-linux-input-authorization': () => Promise<{ success: boolean; message: string }>;
     'get-gw2-update-status': () => Promise<Gw2UpdateStatus>;
     'start-gw2-update': (visible?: boolean) => Promise<boolean>;
+    'save-local-dat': (accountId: string) => Promise<{ success: boolean; message: string }>;
+    'has-local-dat': (accountId: string) => Promise<boolean>;
+    'delete-local-dat': (accountId: string) => Promise<boolean>;
 }
