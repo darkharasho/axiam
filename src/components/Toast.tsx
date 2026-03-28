@@ -45,17 +45,13 @@ export function ToastContainer() {
     if (toasts.length === 0) return null;
 
     return (
-        <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-1.5 pointer-events-none">
             {toasts.map((toast) => (
                 <div
                     key={toast.id}
-                    className={`pointer-events-auto px-4 py-2 rounded-lg shadow-lg text-sm max-w-[320px] transition-all duration-300 ${
-                        toast.exiting ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'
-                    } ${
-                        toast.type === 'error'
-                            ? 'bg-rose-900/90 text-rose-100 border border-rose-700/50'
-                            : 'bg-[var(--theme-surface)] text-[var(--theme-text)] border border-[var(--theme-border)]'
-                    }`}
+                    className={`pointer-events-auto px-3 py-1.5 rounded-md shadow-lg text-xs transition-all duration-300 ${
+                        toast.exiting ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
+                    } bg-[var(--theme-surface-soft)] text-[var(--theme-text)] border border-[var(--theme-border)]`}
                 >
                     {toast.message}
                 </div>
