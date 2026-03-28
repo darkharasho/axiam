@@ -75,6 +75,9 @@ contextBridge.exposeInMainWorld('api', {
     prewarmLinuxInputAuthorization: () => ipcRenderer.invoke('prewarm-linux-input-authorization'),
     getGw2UpdateStatus: () => ipcRenderer.invoke('get-gw2-update-status'),
     startGw2Update: (visible = false) => ipcRenderer.invoke('start-gw2-update', visible),
+    saveLocalDat: (accountId: string) => ipcRenderer.invoke('save-local-dat', accountId),
+    hasLocalDat: (accountId: string) => ipcRenderer.invoke('has-local-dat', accountId),
+    deleteLocalDat: (accountId: string) => ipcRenderer.invoke('delete-local-dat', accountId),
     onGw2UpdateStatus: (callback: (value: unknown) => void) => {
         const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
         ipcRenderer.on('gw2-update-status', listener);
