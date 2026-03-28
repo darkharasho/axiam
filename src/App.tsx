@@ -25,6 +25,7 @@ function App() {
     const [accountApiNames, setAccountApiNames] = useState<Record<string, string>>({});
     const [accountApiCreatedAt, setAccountApiCreatedAt] = useState<Record<string, string>>({});
     const [accountStatuses, setAccountStatuses] = useState<Record<string, 'idle' | 'launching' | 'running' | 'stopping' | 'errored'>>({});
+    const [accountHasLocalDat, setAccountHasLocalDat] = useState<Record<string, boolean>>({});
     const [accountStatusCertainty, setAccountStatusCertainty] = useState<Record<string, LaunchCertainty>>({});
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [isUnlocked, setIsUnlocked] = useState(false);
@@ -116,6 +117,11 @@ function App() {
         try {
             const loadedAccounts = await withTimeout(window.api.getAccounts(), 10_000, 'getAccounts');
             setAccounts(loadedAccounts);
+            const localDatStatus: Record<string, boolean> = {};
+            for (const acc of loadedAccounts) {
+                localDatStatus[acc.id] = await window.api.hasLocalDat(acc.id);
+            }
+            setAccountHasLocalDat(localDatStatus);
         } catch {
             showToast('Failed to load accounts.');
         }
@@ -256,6 +262,20 @@ function App() {
         setTimeout(() => {
             refreshActiveProcesses();
         }, 300);
+    };
+
+    const handleSaveLogin = async (id: string) => {
+        try {
+            const result = await window.api.saveLocalDat(id);
+            if (result.success) {
+                setAccountHasLocalDat((prev) => ({ ...prev, [id]: true }));
+                showToast('Login saved for this account.');
+            } else {
+                showToast(result.message);
+            }
+        } catch {
+            showToast('Failed to save login.');
+        }
     };
 
     const handleLinuxPrewarm = async () => {
@@ -783,6 +803,8 @@ function App() {
                             account={account}
                             onLaunch={handleLaunch}
                             onStop={handleStop}
+                            onSaveLogin={handleSaveLogin}
+                            hasLocalDat={accountHasLocalDat[account.id] ?? false}
                             isActiveProcess={activeAccountIds.includes(account.id)}
                             status={accountStatuses[account.id] ?? 'idle'}
                             statusCertainty={accountStatusCertainty[account.id]}
