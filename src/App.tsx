@@ -694,8 +694,9 @@ function App() {
             <div className="h-screen w-screen text-white flex flex-col">
                 <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
-                        <img src="img/GW2AM.png" alt="GW2AM" className="w-4 h-4 object-contain" />
-                        GW2 AM
+                        <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
+                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                        </span>
                         {showDevChrome ? (
                             <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
                                 Dev Build
@@ -726,8 +727,9 @@ function App() {
                 {/* Custom Title Bar */}
                 <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                     <span className="text-xs font-bold ml-2 flex items-center gap-2">
-                        <img src="img/GW2AM.png" alt="GW2AM" className="w-4 h-4 object-contain" />
-                        GW2 AM
+                        <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
+                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                        </span>
                         {showDevChrome ? (
                             <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
                                 Dev Build
@@ -759,12 +761,13 @@ function App() {
 
     return (
         <div className={`h-screen w-screen text-white flex flex-col overflow-hidden border relative ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`}>
-            <div className="gw2am-mark" aria-hidden="true" />
+            <div className="axiam-mark" aria-hidden="true" />
             {/* Custom Title Bar */}
             <div className={`h-9 bg-[var(--theme-surface)] flex justify-between items-center px-3 select-none border-b relative z-10 ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
                 <span className="text-sm font-bold text-[var(--theme-title)] flex items-center gap-2">
-                    <img src="img/GW2AM.png" alt="GW2AM" className="w-5 h-5 object-contain" />
-                    GW2 AM
+                    <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
+                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-brand-am)' }}>AM</span>
+                    </span>
                     {showDevChrome ? (
                         <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
                             Dev Build

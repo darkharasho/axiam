@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,6 +30,7 @@
   --theme-glow-1: rgba(168, 51, 42, 0.12);
   --theme-glow-2: rgba(127, 32, 27, 0.16);
   --theme-overlay: rgba(0,0,0,0.4);
+  --theme-brand-am: #8B1A1A;
 }
 
 body {
@@ -76,7 +79,7 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.gw2am-mark {
+.axiam-mark {
   position: absolute;
   right: -220px;
   bottom: -110px;
@@ -89,11 +92,11 @@ body {
   transform-origin: center;
   background:
     radial-gradient(circle at 30% 25%, var(--theme-gold-strong) 0%, var(--theme-accent) 48%, var(--theme-accent-strong) 100%);
-  -webkit-mask-image: url('/img/GW2AM.svg');
+  -webkit-mask-image: url('/img/AxiAM.svg');
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center;
   -webkit-mask-size: contain;
-  mask-image: url('/img/GW2AM.svg');
+  mask-image: url('/img/AxiAM.svg');
   mask-repeat: no-repeat;
   mask-position: center;
   mask-size: contain;
