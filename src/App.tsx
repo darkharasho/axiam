@@ -8,7 +8,7 @@ import WhatsNewScreen from './components/WhatsNewScreen.tsx';
 import { applyTheme } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
-import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Zap } from 'lucide-react';
+import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles } from 'lucide-react';
 
 type LaunchPhase = 'idle' | 'launch_requested' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
 type LaunchCertainty = 'verified' | 'inferred';
@@ -36,8 +36,6 @@ function App() {
     const [editingAccount, setEditingAccount] = useState<Account | undefined>(undefined);
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isLinuxPrewarmAvailable, setIsLinuxPrewarmAvailable] = useState(false);
-    const [isLinuxPrewarmRunning, setIsLinuxPrewarmRunning] = useState(false);
     const [updatePhase, setUpdatePhase] = useState<'idle' | 'checking' | 'downloading' | 'ready' | 'error' | 'up_to_date' | 'dismissing'>('idle');
     const [updateLabel, setUpdateLabel] = useState('');
     const [updateProgress, setUpdateProgress] = useState<number | null>(null);
@@ -64,11 +62,6 @@ function App() {
         });
         window.api.getSettings().then((settings) => {
             applyTheme(settings?.themeId || 'blood_legion');
-        });
-        window.api.checkPortalPermissions().then((status) => {
-            setIsLinuxPrewarmAvailable(status.message !== 'Only available on Linux');
-        }).catch(() => {
-            setIsLinuxPrewarmAvailable(false);
         });
         checkMasterPassword().finally(() => setIsAuthChecking(false));
     }, []);
@@ -285,19 +278,6 @@ function App() {
             showToast('Saved login cleared.');
         } catch {
             showToast('Failed to clear saved login.');
-        }
-    };
-
-    const handleLinuxPrewarm = async () => {
-        if (isLinuxPrewarmRunning) return;
-        setIsLinuxPrewarmRunning(true);
-        try {
-            const result = await withTimeout(window.api.prewarmLinuxInputAuthorization(), 10_000, 'prewarmLinuxInputAuthorization');
-            showToast(result.success ? result.message : `Failed: ${result.message}`);
-        } catch {
-            showToast('Failed to trigger Linux input prewarm.');
-        } finally {
-            setIsLinuxPrewarmRunning(false);
         }
     };
 
@@ -845,16 +825,6 @@ function App() {
                     >
                         <Settings size={20} />
                     </button>
-                    {isLinuxPrewarmAvailable && (
-                        <button
-                            onClick={() => { void handleLinuxPrewarm(); }}
-                            disabled={isLinuxPrewarmRunning}
-                            className="p-1.5 text-[var(--theme-text-dim)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-control-bg)] disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors"
-                            title="Prewarm Input Authorization"
-                        >
-                            {isLinuxPrewarmRunning ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
-                        </button>
-                    )}
                     {renderGw2UpdatePill()}
                 </div>
 
