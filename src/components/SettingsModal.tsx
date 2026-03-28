@@ -13,9 +13,6 @@ type SettingsPayload = {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
-    gw2AutoUpdateBeforeLaunch: boolean;
-    gw2AutoUpdateBackground: boolean;
-    gw2AutoUpdateVisible: boolean;
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 350;
@@ -25,11 +22,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
     const [themeId, setThemeId] = useState('blood_legion');
-    const [gw2AutoUpdateBeforeLaunch, setGw2AutoUpdateBeforeLaunch] = useState(false);
-    const [gw2AutoUpdateBackground, setGw2AutoUpdateBackground] = useState(false);
-    const [gw2AutoUpdateVisible, setGw2AutoUpdateVisible] = useState(false);
-    const [gw2UpdateStatusText, setGw2UpdateStatusText] = useState('Idle');
-    const [isRunningGw2Update, setIsRunningGw2Update] = useState(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
     const [isHydrated, setIsHydrated] = useState(false);
     const saveTimerRef = useRef<number | null>(null);
@@ -40,9 +32,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         gw2Path,
         masterPasswordPrompt,
         themeId,
-        gw2AutoUpdateBeforeLaunch,
-        gw2AutoUpdateBackground,
-        gw2AutoUpdateVisible,
     });
 
     const commitSave = async (payload: SettingsPayload, snapshot: string): Promise<void> => {
@@ -90,16 +79,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 gw2Path: settings?.gw2Path || '',
                 masterPasswordPrompt: settings?.masterPasswordPrompt ?? 'every_time',
                 themeId: settings?.themeId || 'blood_legion',
-                gw2AutoUpdateBeforeLaunch: settings?.gw2AutoUpdateBeforeLaunch ?? false,
-                gw2AutoUpdateBackground: settings?.gw2AutoUpdateBackground ?? false,
-                gw2AutoUpdateVisible: settings?.gw2AutoUpdateVisible ?? false,
             };
             setGw2Path(normalized.gw2Path);
             setMasterPasswordPrompt(normalized.masterPasswordPrompt);
             setThemeId(normalized.themeId);
-            setGw2AutoUpdateBeforeLaunch(normalized.gw2AutoUpdateBeforeLaunch);
-            setGw2AutoUpdateBackground(normalized.gw2AutoUpdateBackground);
-            setGw2AutoUpdateVisible(normalized.gw2AutoUpdateVisible);
             const snapshot = JSON.stringify(normalized);
             lastSavedSnapshotRef.current = snapshot;
             pendingSaveRef.current = null;
@@ -107,27 +90,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             if (!cancelled) setIsHydrated(true);
         });
 
-        window.api.getGw2UpdateStatus().then((status) => {
-            const message = status.message ? ` - ${status.message}` : '';
-            setGw2UpdateStatusText(`${status.phase}${message}`);
-        }).catch(() => {
-            setGw2UpdateStatusText('Unknown');
-        });
-
-        const unsubscribeGw2Status = window.api.onGw2UpdateStatus((status) => {
-            const typed = status as {
-                phase?: string;
-                message?: string;
-            };
-            const phase = typed?.phase || 'unknown';
-            const message = typed?.message ? ` - ${typed.message}` : '';
-            setGw2UpdateStatusText(`${phase}${message}`);
-            setIsRunningGw2Update(phase === 'starting' || phase === 'running' || phase === 'queued');
-        });
-
         return () => {
             cancelled = true;
-            unsubscribeGw2Status();
         };
     }, [isOpen]);
 
@@ -153,25 +117,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         gw2Path,
         masterPasswordPrompt,
         themeId,
-        gw2AutoUpdateBeforeLaunch,
-        gw2AutoUpdateBackground,
-        gw2AutoUpdateVisible,
     ]);
-
-    const handleRunGw2Update = async () => {
-        if (isRunningGw2Update) return;
-        setIsRunningGw2Update(true);
-        try {
-            const ok = await window.api.startGw2Update(gw2AutoUpdateVisible);
-            if (!ok) {
-                showToast('GW2 update failed. Check path and permissions.');
-            }
-        } catch {
-            showToast('Failed to start GW2 update.');
-        } finally {
-            setIsRunningGw2Update(false);
-        }
-    };
 
     const handleAutoLocateGw2Path = async () => {
         if (isLocatingGw2Path) return;
@@ -265,50 +211,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                             <option value="monthly">Once a month</option>
                             <option value="never">Never</option>
                         </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-2">GW2 Game Updates</label>
-                        <div className="space-y-2 text-sm">
-                            <label className="flex items-center justify-between gap-3">
-                                <span className="text-[var(--theme-text)]">Update before launch</span>
-                                <input
-                                    type="checkbox"
-                                    checked={gw2AutoUpdateBeforeLaunch}
-                                    onChange={(e) => setGw2AutoUpdateBeforeLaunch(e.target.checked)}
-                                    className="w-4 h-4 rounded"
-                                />
-                            </label>
-                            <label className="flex items-center justify-between gap-3">
-                                <span className="text-[var(--theme-text)]">Background update on app start</span>
-                                <input
-                                    type="checkbox"
-                                    checked={gw2AutoUpdateBackground}
-                                    onChange={(e) => setGw2AutoUpdateBackground(e.target.checked)}
-                                    className="w-4 h-4 rounded"
-                                />
-                            </label>
-                            <label className="flex items-center justify-between gap-3">
-                                <span className="text-[var(--theme-text)]">Show patch UI (visible updater)</span>
-                                <input
-                                    type="checkbox"
-                                    checked={gw2AutoUpdateVisible}
-                                    onChange={(e) => setGw2AutoUpdateVisible(e.target.checked)}
-                                    className="w-4 h-4 rounded"
-                                />
-                            </label>
-                            <div className="pt-1">
-                                <p className="text-xs text-[var(--theme-text-dim)]">Status: {gw2UpdateStatusText}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => { void handleRunGw2Update(); }}
-                                disabled={isRunningGw2Update}
-                                className="w-full px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] disabled:opacity-60 disabled:cursor-not-allowed text-[var(--theme-text)] transition-colors text-sm"
-                            >
-                                {isRunningGw2Update ? 'Updating...' : 'Run GW2 Update Now'}
-                            </button>
-                        </div>
                     </div>
 
                     <div>

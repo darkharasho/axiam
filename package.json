@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "node scripts/dev-entry.mjs",
     "dev:update": "cross-env AXIAM_DEV_FAKE_UPDATE=1 AXIAM_DEV_FAKE_WHATS_NEW=1 npm run dev",
-    "dev:gw2_update": "cross-env AXIAM_DEV_FAKE_GW2_UPDATE=1 npm run dev",
     "dev:showcase": "cross-env AXIAM_DEV_SHOWCASE=1 AXIAM_DEV_FAKE_WHATS_NEW=1 npm run dev",
     "dev:birthday": "cross-env VITE_FORCE_BIRTHDAY=1 npm run dev",
     "dev:web": "vite",

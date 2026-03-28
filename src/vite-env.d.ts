@@ -56,25 +56,6 @@ interface Api {
     maximizeWindow: () => void;
     closeWindow: () => void;
     resetApp: () => void;
-    getGw2UpdateStatus: () => Promise<{
-        phase: 'idle' | 'queued' | 'starting' | 'running' | 'completed' | 'failed';
-        mode: 'before_launch' | 'background' | 'manual';
-        platform: string;
-        accountId?: string;
-        startedAt?: number;
-        completedAt?: number;
-        message?: string;
-    }>;
-    startGw2Update: (visible?: boolean) => Promise<boolean>;
-    onGw2UpdateStatus: (callback: (value: {
-        phase: 'idle' | 'queued' | 'starting' | 'running' | 'completed' | 'failed';
-        mode: 'before_launch' | 'background' | 'manual';
-        platform: string;
-        accountId?: string;
-        startedAt?: number;
-        completedAt?: number;
-        message?: string;
-    }) => void) => () => void;
 }
 
 declare global {

@@ -39,15 +39,12 @@ function App() {
     const [updatePhase, setUpdatePhase] = useState<'idle' | 'checking' | 'downloading' | 'ready' | 'error' | 'up_to_date' | 'dismissing'>('idle');
     const [updateLabel, setUpdateLabel] = useState('');
     const [updateProgress, setUpdateProgress] = useState<number | null>(null);
-    const [gw2UpdatePillPhase, setGw2UpdatePillPhase] = useState<'idle' | 'checking' | 'updating' | 'success' | 'error' | 'dismissing'>('idle');
-    const [gw2UpdatePillLabel, setGw2UpdatePillLabel] = useState('');
     const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
     const [whatsNewVersion, setWhatsNewVersion] = useState(appVersion);
     const [whatsNewNotes, setWhatsNewNotes] = useState<string>('Loading release notes...');
     const processMissCountsRef = useRef<Record<string, number>>({});
     const updateDismissTimerRef = useRef<number | null>(null);
     const updateHideTimerRef = useRef<number | null>(null);
-    const gw2UpdatePillHideTimerRef = useRef<number | null>(null);
     const autoWhatsNewCheckedRef = useRef(false);
 
     useEffect(() => {
@@ -463,80 +460,6 @@ function App() {
         };
     }, []);
 
-    useEffect(() => {
-        if (!window.api) return;
-
-        const clearGw2PillTimer = () => {
-            if (gw2UpdatePillHideTimerRef.current !== null) {
-                window.clearTimeout(gw2UpdatePillHideTimerRef.current);
-                gw2UpdatePillHideTimerRef.current = null;
-            }
-        };
-
-        const dismissGw2Pill = (delayMs: number) => {
-            clearGw2PillTimer();
-            gw2UpdatePillHideTimerRef.current = window.setTimeout(() => {
-                setGw2UpdatePillPhase('dismissing');
-                gw2UpdatePillHideTimerRef.current = window.setTimeout(() => {
-                    setGw2UpdatePillPhase('idle');
-                    setGw2UpdatePillLabel('');
-                }, 300);
-            }, delayMs);
-        };
-
-        const updateGw2PillFromStatus = (status: {
-            phase: 'idle' | 'queued' | 'starting' | 'running' | 'completed' | 'failed';
-            mode: 'before_launch' | 'background' | 'manual';
-            message?: string;
-        }) => {
-            const message = (status.message || '').trim();
-            if (status.phase === 'queued' || status.phase === 'starting') {
-                clearGw2PillTimer();
-                setGw2UpdatePillPhase('checking');
-                setGw2UpdatePillLabel(message || 'Checking GW2 update...');
-                return;
-            }
-            if (status.phase === 'running') {
-                clearGw2PillTimer();
-                setGw2UpdatePillPhase('updating');
-                setGw2UpdatePillLabel(message || 'Updating GW2...');
-                return;
-            }
-            if (status.phase === 'completed') {
-                clearGw2PillTimer();
-                setGw2UpdatePillPhase('success');
-                setGw2UpdatePillLabel(message || 'GW2 up to date');
-                dismissGw2Pill(1800);
-                return;
-            }
-            if (status.phase === 'failed') {
-                clearGw2PillTimer();
-                setGw2UpdatePillPhase('error');
-                setGw2UpdatePillLabel(message || 'GW2 update failed');
-                dismissGw2Pill(4500);
-                return;
-            }
-            clearGw2PillTimer();
-            setGw2UpdatePillPhase('idle');
-            setGw2UpdatePillLabel('');
-        };
-
-        window.api.getGw2UpdateStatus().then((status) => {
-            updateGw2PillFromStatus(status);
-        }).catch(() => {
-            // ignore
-        });
-
-        const unsubscribe = window.api.onGw2UpdateStatus((status) => {
-            updateGw2PillFromStatus(status);
-        });
-
-        return () => {
-            clearGw2PillTimer();
-            unsubscribe();
-        };
-    }, []);
-
     const showUpdateIndicator = updatePhase !== 'idle';
     const updateIndicatorText = updateLabel
         || (updatePhase === 'checking'
@@ -604,33 +527,6 @@ function App() {
         return (
             <span className={updateIndicatorClass} title={updateIndicatorText}>
                 {content}
-            </span>
-        );
-    };
-
-    const renderGw2UpdatePill = () => {
-        if (gw2UpdatePillPhase === 'idle') return null;
-        const className = `gw2-update-pill ${gw2UpdatePillPhase === 'error'
-            ? 'gw2-update-pill--error'
-            : gw2UpdatePillPhase === 'success'
-                ? 'gw2-update-pill--success'
-                : ''} ${gw2UpdatePillPhase === 'dismissing' ? 'gw2-update-pill--exit' : ''}`;
-        return (
-            <span className={className} title={gw2UpdatePillLabel}>
-                {(gw2UpdatePillPhase === 'checking' || gw2UpdatePillPhase === 'updating') && (
-                    <RefreshCw size={10} className="animate-spin" />
-                )}
-                {(gw2UpdatePillPhase === 'success' || gw2UpdatePillPhase === 'dismissing') && <span className="gw2-update-pill__dot bg-emerald-300" aria-hidden="true" />}
-                {gw2UpdatePillPhase === 'error' && <span className="gw2-update-pill__dot bg-rose-300" aria-hidden="true" />}
-                <span>
-                    {gw2UpdatePillPhase === 'checking'
-                        ? 'Checking GW2'
-                        : gw2UpdatePillPhase === 'updating'
-                            ? 'Updating GW2'
-                            : gw2UpdatePillPhase === 'success' || gw2UpdatePillPhase === 'dismissing'
-                                ? 'GW2 up to date'
-                                : 'GW2 update failed'}
-                </span>
             </span>
         );
     };
@@ -831,7 +727,6 @@ function App() {
                     >
                         <Settings size={20} />
                     </button>
-                    {renderGw2UpdatePill()}
                 </div>
 
                 {accounts.length > 0 && (

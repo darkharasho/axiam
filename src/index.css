@@ -129,16 +129,6 @@ body {
   100% { transform: translateX(220%); }
 }
 
-@keyframes gw2PillEnter {
-  0% { opacity: 0; transform: translateX(-18px) scale(0.96); }
-  100% { opacity: 1; transform: translateX(0) scale(1); }
-}
-
-@keyframes gw2PillExit {
-  0% { opacity: 1; transform: translateX(0) scale(1); }
-  100% { opacity: 0; transform: translateX(-16px) scale(0.92); }
-}
-
 .update-indicator {
   position: relative;
   margin-left: 0.5rem;
@@ -225,52 +215,10 @@ body {
   animation: updateShimmer 1200ms linear infinite;
 }
 
-.gw2-update-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
-  background: color-mix(in srgb, var(--theme-control-bg) 75%, transparent);
-  color: var(--theme-text-dim);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  padding: 0.26rem 0.52rem;
-  transform-origin: left center;
-  animation: gw2PillEnter 240ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.gw2-update-pill--success {
-  color: color-mix(in srgb, #10b981 78%, var(--theme-text) 22%);
-  border-color: color-mix(in srgb, #10b981 45%, transparent);
-  background: color-mix(in srgb, #10b981 18%, transparent);
-}
-
-.gw2-update-pill--error {
-  color: color-mix(in srgb, #fb7185 82%, var(--theme-text) 18%);
-  border-color: color-mix(in srgb, #fb7185 45%, transparent);
-  background: color-mix(in srgb, #fb7185 16%, transparent);
-}
-
-.gw2-update-pill__dot {
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 999px;
-  display: inline-block;
-}
-
-.gw2-update-pill--exit {
-  animation: gw2PillExit 280ms ease-in forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .update-indicator,
   .update-indicator__ring,
-  .update-indicator__progress-shimmer,
-  .gw2-update-pill,
-  .gw2-update-pill--exit {
+  .update-indicator__progress-shimmer {
     animation: none;
   }
 }
