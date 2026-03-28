@@ -1645,8 +1645,6 @@ ipcMain.handle('save-account', async (_, accountData) => {
     email: accountData.email,
     passwordEncrypted: encryptedPassword,
     launchArguments: accountData.launchArguments,
-    playClickXPercent: Number.isFinite(accountData.playClickXPercent) ? Number(accountData.playClickXPercent) : undefined,
-    playClickYPercent: Number.isFinite(accountData.playClickYPercent) ? Number(accountData.playClickYPercent) : undefined,
     apiKey: accountData.apiKey ?? '',
     apiAccountName: '',
     apiCreatedAt: '',
@@ -1655,13 +1653,7 @@ ipcMain.handle('save-account', async (_, accountData) => {
   // @ts-ignore
   const accounts = (store.get('accounts') as any[]) || [];
   store.set('accounts', [...accounts, newAccount]);
-  // Log stored account for diagnostics
-  try {
-    const saved = ((store.get('accounts') as any[]) || []).find((a: any) => a.id === id);
-    logMain('automation', `Saved account id=${id} playClickX=${String(saved?.playClickXPercent)} playClickY=${String(saved?.playClickYPercent)}`);
-  } catch (e) {
-    logMainWarn('automation', `Unable to read back saved account for diagnostics: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  logMain('launch', `Saved account id=${id}`);
   return true;
 });
 
@@ -1776,8 +1768,6 @@ ipcMain.handle('update-account', async (_, id, accountData) => {
     email: accountData.email,
     passwordEncrypted,
     launchArguments: accountData.launchArguments ?? existing.launchArguments ?? '',
-    playClickXPercent: Number.isFinite(accountData.playClickXPercent) ? Number(accountData.playClickXPercent) : existing.playClickXPercent,
-    playClickYPercent: Number.isFinite(accountData.playClickYPercent) ? Number(accountData.playClickYPercent) : existing.playClickYPercent,
     apiKey: nextApiKey,
     apiAccountName: nextApiKey === existingApiKey ? (existing.apiAccountName ?? '') : '',
     apiCreatedAt: nextApiKey === existingApiKey ? (existing.apiCreatedAt ?? '') : '',

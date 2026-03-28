@@ -20,8 +20,6 @@ interface Api {
     stopAccountProcess: (id: string) => Promise<boolean>;
     isGw2Running: () => Promise<boolean>;
     stopGw2Process: () => Promise<boolean>;
-    capturePlayClickCalibration: (accountId: string) => Promise<{ xPercent: number; yPercent: number } | null>;
-    resetPlayClickCalibration: (accountId: string) => Promise<boolean>;
     getLaunchStates: () => Promise<Array<{
         accountId: string;
         phase: 'idle' | 'launch_requested' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
