@@ -1,6 +1,6 @@
-# <img width="42" height="47" alt="GW2AM" src="https://github.com/user-attachments/assets/1c349236-c3ca-4f1a-9882-6d91b86a2c0d" /> GW2 Account Manager
+# <img width="42" height="47" alt="AxiAM" src="https://github.com/user-attachments/assets/1c349236-c3ca-4f1a-9882-6d91b86a2c0d" /> AxiAM
 
-A desktop account launcher for Guild Wars 2 focused on speed, security, and clean multi-account workflow.
+A desktop account launcher focused on speed, security, and clean multi-account workflow.
 
 ## User Features
 - **Secure account vault**: credentials are encrypted locally with a master password.
@@ -70,7 +70,7 @@ RELEASE_NOTES_AUTO_APPROVE=1
 
 ### Unsigned test builds (not recommended)
 ```bash
-GW2AM_ALLOW_UNSIGNED_WINDOWS=1 npm run build:github
+AXIAM_ALLOW_UNSIGNED_WINDOWS=1 npm run build:github
 ```
 Use this only for local testing. Unsigned Windows binaries are expected to be flagged.
 
@@ -81,4 +81,4 @@ Use this only for local testing. Unsigned Windows binaries are expected to be fl
 
 ## Project Links
 - Discord: `https://discord.gg/UjzMXMGXEg`
-- GitHub: `https://github.com/darkharasho/GW2AM`
+- GitHub: `https://github.com/darkharasho/axiam`
