@@ -657,7 +657,7 @@ function getAccountMumbleName(accountId: string): string {
 }
 
 function stripManagedLaunchArguments(args: string[]): string[] {
-  const valueTakingFlags = new Set(['--mumble', '-mumble', '-provider', '--provider']);
+  const valueTakingFlags = new Set(['--mumble', '-mumble']);
   const standaloneFlags = new Set(['-autologin', '--autologin']);
   const cleaned: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
@@ -671,9 +671,7 @@ function stripManagedLaunchArguments(args: string[]): string[] {
 
     if (
       lowerArg.startsWith('--mumble=') ||
-      lowerArg.startsWith('-mumble=') ||
-      lowerArg.startsWith('--provider=') ||
-      lowerArg.startsWith('-provider=')
+      lowerArg.startsWith('-mumble=')
     ) {
       continue;
     }

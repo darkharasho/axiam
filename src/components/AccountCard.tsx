@@ -89,7 +89,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account, onLaunch, onStop, on
                             : 'bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)]'
                     } disabled:opacity-60 disabled:cursor-not-allowed`}
                     title={hasAuth ? 'Login saved — click to re-save' : 'Save Login (log in manually first)'}
-                    disabled={isActiveProcess || status === 'launching' || status === 'stopping'}
+                    disabled={status === 'launching' || status === 'stopping'}
                 >
                     <Save size={16} />
                 </button>
