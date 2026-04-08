@@ -79,6 +79,59 @@ Use this only for local testing. Unsigned Windows binaries are expected to be fl
 - **GW2 Path**: set path to `Gw2-64.exe` (Linux can use a wrapper script).
 - **Prompt cadence**: choose when the master password is required again.
 
+## Architecture
+
+AxiAM is built with **Electron + React 18 + TypeScript** on the frontend and a Node.js main process handling system-level operations.
+
+```
+src/
+  App.tsx              # Main React application component
+  components/          # React components (modals, cards, UI elements)
+  themes/              # Theme definitions and application logic
+  types.ts             # Shared TypeScript types
+electron/
+  main.ts              # Electron main process (IPC, file I/O, updater)
+  preload.cts          # Context bridge for secure IPC
+  store.ts             # Persistent settings and account storage
+  crypto.ts            # Encryption utilities
+```
+
+- **UI**: React 18 with Tailwind CSS and a custom glassmorphic design system
+- **Encryption**: AES-256-GCM via Node.js `crypto` module, keyed from the master password
+- **Auto-updater**: electron-updater with GitHub Releases as the update source
+- **Build tooling**: Vite for dev/bundling, electron-builder for packaging
+
+## Contributing
+
+1. Fork the repo and create a feature branch from `main`.
+2. Follow existing code style — React functional components with TypeScript.
+3. Write clear commit messages (conventional commits preferred).
+4. Run `npm run dev` and manually verify your changes before opening a PR.
+5. Open a PR against `main` with a description of what changed and why.
+
+Please keep PRs focused — one feature or fix per PR. If you're unsure about a larger change, open an issue first to discuss.
+
+## FAQ
+
+**Q: I forgot my master password. Can I recover my accounts?**
+A: No. The master password is never stored and cannot be recovered. You'll need to reset app data and re-add your accounts.
+
+**Q: Does AxiAM store my credentials online?**
+A: No. All credentials are encrypted and stored locally on your machine. Nothing is transmitted to any server.
+
+**Q: Can I use AxiAM on Linux?**
+A: Yes. Point the GW2 path to a wrapper script that launches the game through Proton/Wine. The rest of the app works natively.
+
+**Q: The app says an update is available but nothing happens.**
+A: Check your internet connection and firewall settings. Updates are downloaded from GitHub Releases. If the issue persists, download the latest installer manually.
+
+**Q: Why does Windows SmartScreen warn me about the installer?**
+A: Unsigned builds trigger SmartScreen warnings. Official releases are code-signed to avoid this. If you built from source without a signing certificate, this is expected.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
 ## Project Links
 - Discord: `https://discord.gg/UjzMXMGXEg`
 - GitHub: `https://github.com/darkharasho/axiam`
