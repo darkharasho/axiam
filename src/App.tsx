@@ -815,12 +815,12 @@ function App() {
             <div className="axiam-mark" aria-hidden="true" />
             <AmbientParticles />
 
-            {/* Compact title bar — just drag region + window controls */}
+            {/* Compact title bar — drag region + branding + window controls */}
             <div
-                className={`h-8 titlebar flex justify-between items-center px-2 select-none relative z-12 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
+                className={`h-8 titlebar flex items-center px-2 select-none relative z-12 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
                 style={{ WebkitAppRegion: 'drag' } as any}
             >
-                <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-dim)]">
+                <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-dim)] min-w-0">
                     {showDevChrome ? (
                         <span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-amber-300">
                             Dev
@@ -830,7 +830,12 @@ function App() {
                     )}
                     {renderUpdateIndicator()}
                 </span>
-                <div className="flex items-center gap-0.5 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                <span className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none">
+                    <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em', fontWeight: 700, fontSize: '0.7rem' }}>
+                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
+                    </span>
+                </span>
+                <div className="flex items-center gap-0.5 relative z-50 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     <button onClick={minimize} className="window-btn !w-6 !h-6"><Minus size={12} /></button>
                     <button onClick={maximize} className="window-btn !w-6 !h-6"><Square size={9} /></button>
                     <button onClick={close} className="window-btn window-btn--close !w-6 !h-6"><X size={12} /></button>
