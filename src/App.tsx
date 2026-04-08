@@ -8,7 +8,12 @@ import WhatsNewScreen from './components/WhatsNewScreen.tsx';
 import { applyTheme } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
-import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles } from 'lucide-react';
+import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search } from 'lucide-react';
+import AmbientParticles from './components/AmbientParticles.tsx';
+import SkeletonCards from './components/SkeletonCards.tsx';
+import { ContextMenuContainer } from './components/ContextMenu.tsx';
+import Confetti from './components/Confetti.tsx';
+import Tooltip from './components/Tooltip.tsx';
 
 type LaunchPhase = 'idle' | 'launch_requested' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
 type LaunchCertainty = 'verified' | 'inferred';
@@ -46,6 +51,16 @@ function App() {
     const updateDismissTimerRef = useRef<number | null>(null);
     const updateHideTimerRef = useRef<number | null>(null);
     const autoWhatsNewCheckedRef = useRef(false);
+    const [accountsLoading, setAccountsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [accountOrder, setAccountOrder] = useState<string[]>([]);
+    const [dragOverIndex, setDragOverIndex] = useState(-1);
+    const dragSourceIndex = useRef(-1);
+    const [showConfetti, setShowConfetti] = useState(false);
+    const hasEverLaunchedRef = useRef(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!window.api) {
@@ -107,6 +122,14 @@ function App() {
         try {
             const loadedAccounts = await withTimeout(window.api.getAccounts(), 10_000, 'getAccounts');
             setAccounts(loadedAccounts);
+            // Restore or initialize order
+            setAccountOrder((prev) => {
+                const existingIds = new Set(loadedAccounts.map((a) => a.id));
+                const saved = prev.length > 0 ? prev : loadSavedOrder();
+                const ordered = saved.filter((id) => existingIds.has(id));
+                const newIds = loadedAccounts.map((a) => a.id).filter((id) => !ordered.includes(id));
+                return [...ordered, ...newIds];
+            });
             const localDatStatus: Record<string, boolean> = {};
             for (const acc of loadedAccounts) {
                 localDatStatus[acc.id] = await window.api.hasLocalDat(acc.id);
@@ -114,6 +137,8 @@ function App() {
             setAccountHasLocalDat(localDatStatus);
         } catch {
             showToast('Failed to load accounts.');
+        } finally {
+            setAccountsLoading(false);
         }
     };
 
@@ -533,19 +558,13 @@ function App() {
 
     // Window controls
     const minimize = () => {
-        console.log('Minimize clicked');
         if (window.api) window.api.minimizeWindow();
-        else console.error('window.api is missing');
     };
     const maximize = () => {
-        console.log('Maximize clicked');
         if (window.api) window.api.maximizeWindow();
-        else console.error('window.api is missing');
     };
     const close = () => {
-        console.log('Close clicked');
         if (window.api) window.api.closeWindow();
-        else console.error('window.api is missing');
     };
     const openWhatsNew = async (options?: { markSeen?: boolean }) => {
         setIsWhatsNewOpen(true);
@@ -585,34 +604,177 @@ function App() {
         void maybeOpenWhatsNew();
     }, [isUnlocked]);
 
+    /* ───────────────── Ordering ───────────────── */
+    const orderedAccounts = (() => {
+        const byId = new Map(accounts.map((a) => [a.id, a]));
+        const ordered = accountOrder.map((id) => byId.get(id)).filter(Boolean) as Account[];
+        // Append any accounts not in the order
+        const inOrder = new Set(accountOrder);
+        for (const a of accounts) {
+            if (!inOrder.has(a.id)) ordered.push(a);
+        }
+        return ordered;
+    })();
+
+    const filteredAccounts = searchQuery.trim()
+        ? orderedAccounts.filter((a) =>
+            a.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (accountApiNames[a.id] || '').toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        : orderedAccounts;
+
+    /* ───────────────── Drag reorder ───────────────── */
+    const handleDragStart = (index: number) => (e: React.DragEvent) => {
+        dragSourceIndex.current = index;
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (index: number) => (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverIndex(index);
+    };
+
+    const handleDrop = (targetIndex: number) => (_e: React.DragEvent) => {
+        const sourceIndex = dragSourceIndex.current;
+        if (sourceIndex < 0 || sourceIndex === targetIndex) return;
+        setAccountOrder((prev) => {
+            const next = [...prev];
+            const [moved] = next.splice(sourceIndex, 1);
+            next.splice(targetIndex, 0, moved);
+            saveOrder(next);
+            return next;
+        });
+        setDragOverIndex(-1);
+        dragSourceIndex.current = -1;
+    };
+
+    const handleDragEnd = () => {
+        setDragOverIndex(-1);
+        dragSourceIndex.current = -1;
+    };
+
+    /* ───────────────── Confetti ───────────────── */
+    const handleLaunchWithConfetti = async (id: string) => {
+        await handleLaunch(id);
+        if (!hasEverLaunchedRef.current) {
+            const stored = localStorage.getItem('axiam_has_launched');
+            if (!stored) {
+                hasEverLaunchedRef.current = true;
+                localStorage.setItem('axiam_has_launched', '1');
+                setShowConfetti(true);
+            } else {
+                hasEverLaunchedRef.current = true;
+            }
+        }
+    };
+
+    /* ───────────────── Keyboard shortcuts ───────────────── */
+    useEffect(() => {
+        if (!isUnlocked) return;
+        const handler = (e: KeyboardEvent) => {
+            // Don't handle shortcuts when modals are open or input is focused
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+            if (isAddModalOpen || isSettingsOpen || isWhatsNewOpen) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                setEditingAccount(undefined);
+                setIsAddModalOpen(true);
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                setSearchOpen(true);
+                setTimeout(() => searchInputRef.current?.focus(), 50);
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex((prev) => Math.min(prev + 1, filteredAccounts.length - 1));
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex((prev) => Math.max(prev - 1, 0));
+                return;
+            }
+            if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < filteredAccounts.length) {
+                e.preventDefault();
+                const acc = filteredAccounts[selectedIndex];
+                const st = accountStatuses[acc.id];
+                const isActive = activeAccountIds.includes(acc.id);
+                if (isActive || st === 'stopping') {
+                    handleStop(acc.id);
+                } else if (st !== 'launching') {
+                    handleLaunchWithConfetti(acc.id);
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                if (searchOpen) {
+                    setSearchOpen(false);
+                    setSearchQuery('');
+                }
+                setSelectedIndex(-1);
+                return;
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isUnlocked, filteredAccounts, selectedIndex, isAddModalOpen, isSettingsOpen, isWhatsNewOpen, searchOpen, accountStatuses, activeAccountIds]);
+
+    /* ───────────────── Delete from context menu ───────────────── */
+    const handleDeleteFromMenu = async (id: string) => {
+        const acc = accounts.find((a) => a.id === id);
+        if (!acc) return;
+        if (!confirm(`Delete account "${acc.nickname}"? This cannot be undone.`)) return;
+        await handleDeleteAccount(id);
+    };
+
+    /* ───────────────── Title Bar ───────────────── */
+    const TitleBar = ({ minimal }: { minimal?: boolean }) => (
+        <div
+            className={`h-9 titlebar flex justify-between items-center px-3 select-none relative z-10 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
+            style={{ WebkitAppRegion: 'drag' } as any}
+        >
+            <span className="text-sm font-semibold text-[var(--theme-title)] flex items-center gap-2">
+                <img src="img/AxiAM.png" alt="AxiAM" className="w-5 h-5 object-contain" />
+                <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
+                </span>
+                {showDevChrome ? (
+                    <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+                        Dev
+                    </span>
+                ) : null}
+                {!showDevChrome ? <span className="text-[10px] font-normal text-[var(--theme-text-dim)] opacity-60">v{appVersion}</span> : null}
+                {renderUpdateIndicator()}
+            </span>
+            <div className="flex items-center gap-0.5 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                <button
+                    onClick={() => { void openWhatsNew(); }}
+                    className="window-btn"
+                    title="What's New"
+                >
+                    <Sparkles size={13} />
+                </button>
+                {!minimal && (
+                    <>
+                        <button onClick={minimize} className="window-btn"><Minus size={14} /></button>
+                        <button onClick={maximize} className="window-btn"><Square size={11} /></button>
+                    </>
+                )}
+                <button onClick={close} className="window-btn window-btn--close"><X size={14} /></button>
+            </div>
+        </div>
+    );
+
     if (isAuthChecking) {
         return (
             <div className="h-screen w-screen text-white flex flex-col">
-                <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
-                    <span className="text-xs font-bold ml-2 flex items-center gap-2">
-                        <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
-                        <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
-                        </span>
-                        {showDevChrome ? (
-                            <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
-                                Dev Build
-                            </span>
-                        ) : null}
-                        {!showDevChrome ? <span className="text-[10px] font-normal text-[var(--theme-text-dim)]">v{appVersion}</span> : null}
-                        {renderUpdateIndicator()}
-                    </span>
-                    <div className="flex space-x-2 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                        <button
-                            onClick={() => { void openWhatsNew(); }}
-                            className="p-1 hover:bg-[var(--theme-control-bg)] rounded transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
-                            title="What's New"
-                        >
-                            <Sparkles size={12} />
-                        </button>
-                        <button onClick={close} className="p-1 hover:bg-[var(--theme-accent)] rounded transition-colors"><X size={12} /></button>
-                    </div>
-                </div>
+                <TitleBar minimal />
                 <ToastContainer />
             </div>
         );
@@ -621,32 +783,7 @@ function App() {
     if (!isUnlocked) {
         return (
             <div className="h-screen w-screen text-white flex flex-col">
-                {/* Custom Title Bar */}
-                <div className={`h-8 bg-[var(--theme-surface)] border-b flex justify-between items-center px-2 select-none ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
-                    <span className="text-xs font-bold ml-2 flex items-center gap-2">
-                        <img src="img/AxiAM.png" alt="AxiAM" className="w-4 h-4 object-contain" />
-                        <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                            <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
-                        </span>
-                        {showDevChrome ? (
-                            <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
-                                Dev Build
-                            </span>
-                        ) : null}
-                        {!showDevChrome ? <span className="text-[10px] font-normal text-[var(--theme-text-dim)]">v{appVersion}</span> : null}
-                        {renderUpdateIndicator()}
-                    </span>
-                    <div className="flex space-x-2 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                        <button
-                            onClick={() => { void openWhatsNew(); }}
-                            className="p-1 hover:bg-[var(--theme-control-bg)] rounded transition-colors text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]"
-                            title="What's New"
-                        >
-                            <Sparkles size={12} />
-                        </button>
-                        <button onClick={close} className="p-1 hover:bg-[var(--theme-accent)] rounded transition-colors"><X size={12} /></button>
-                    </div>
-                </div>
+                <TitleBar minimal />
                 <MasterPasswordModal
                     mode={masterPasswordMode}
                     onSubmit={handleMasterPasswordSubmit}
@@ -658,54 +795,71 @@ function App() {
     }
 
     return (
-        <div className={`h-screen w-screen text-white flex flex-col overflow-hidden border relative ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`}>
+        <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`}>
             <div className="axiam-mark" aria-hidden="true" />
-            {/* Custom Title Bar */}
-            <div className={`h-9 bg-[var(--theme-surface)] flex justify-between items-center px-3 select-none border-b relative z-10 ${showDevChrome ? 'border-[#f59e0b]' : 'border-[var(--theme-border)]'}`} style={{ WebkitAppRegion: 'drag' } as any}>
-                <span className="text-sm font-bold text-[var(--theme-title)] flex items-center gap-2">
-                    <img src="img/AxiAM.png" alt="AxiAM" className="w-5 h-5 object-contain" />
-                    <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em' }}>
-                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
-                    </span>
-                    {showDevChrome ? (
-                        <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
-                            Dev Build
-                        </span>
-                    ) : null}
-                    {!showDevChrome ? <span className="text-[11px] font-normal text-[var(--theme-text-dim)]">v{appVersion}</span> : null}
-                    {renderUpdateIndicator()}
-                </span>
-                <div className="flex space-x-1 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    <button
-                        onClick={() => { void openWhatsNew(); }}
-                        className="p-1 hover:bg-[var(--theme-control-bg)] rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"
-                        title="What's New"
-                    >
-                        <Sparkles size={13} />
-                    </button>
-                    <button onClick={minimize} className="p-1 hover:bg-[var(--theme-control-bg)] rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"><Minus size={14} /></button>
-                    <button onClick={maximize} className="p-1 hover:bg-[var(--theme-control-bg)] rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors"><Square size={12} /></button>
-                    <button onClick={close} className="p-1 hover:bg-[var(--theme-accent)] rounded text-[var(--theme-text-muted)] hover:text-white transition-colors"><X size={14} /></button>
-                </div>
-            </div>
+            <AmbientParticles />
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 relative z-10">
-                {accounts.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-dim)]">
-                        <p>No accounts added yet.</p>
+            <TitleBar />
+
+            {/* Search bar */}
+            {searchOpen && (
+                <div className={`px-3 pt-2 relative z-10 ${searchOpen ? 'search-bar-enter' : ''}`}>
+                    <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5">
+                        <Search size={14} className="text-[var(--theme-text-dim)] shrink-0" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                    setSearchOpen(false);
+                                    setSearchQuery('');
+                                }
+                            }}
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-dim)] select-text"
+                            placeholder="Search accounts..."
+                            autoFocus
+                        />
                         <button
-                            onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                            className="mt-4 px-4 py-2 bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-strong)] text-white rounded-lg transition-colors flex items-center"
+                            onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                            className="window-btn !w-6 !h-6"
                         >
-                            <Plus size={18} className="mr-2" /> Add Account
+                            <X size={12} />
                         </button>
                     </div>
+                </div>
+            )}
+
+            {/* Account list */}
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 relative z-10">
+                {accountsLoading ? (
+                    <SkeletonCards count={3} />
+                ) : accounts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full empty-state">
+                        <div className="empty-state-icon mb-4">
+                            <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center">
+                                <Plus size={28} className="text-[var(--theme-text-dim)]" />
+                            </div>
+                        </div>
+                        <p className="text-sm text-[var(--theme-text-dim)] mb-4 font-light">No accounts yet</p>
+                        <button
+                            onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
+                            className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2"
+                        >
+                            <Plus size={16} /> Add Account
+                        </button>
+                    </div>
+                ) : filteredAccounts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-dim)]">
+                        <p className="text-sm font-light">No matching accounts</p>
+                    </div>
                 ) : (
-                    accounts.map(account => (
+                    filteredAccounts.map((account, index) => (
                         <AccountCard
                             key={account.id}
                             account={account}
-                            onLaunch={handleLaunch}
+                            onLaunch={handleLaunchWithConfetti}
                             onStop={handleStop}
                             isActiveProcess={activeAccountIds.includes(account.id)}
                             status={accountStatuses[account.id] ?? 'idle'}
@@ -713,29 +867,51 @@ function App() {
                             accountApiName={accountApiNames[account.id] || ''}
                             isBirthday={isBirthday(accountApiCreatedAt[account.id])}
                             onEdit={handleEditAccount}
+                            onDelete={handleDeleteFromMenu}
+                            index={index}
+                            selected={index === selectedIndex}
+                            onSelect={() => setSelectedIndex(index)}
+                            hasLocalDat={accountHasLocalDat[account.id] ?? false}
+                            onDragStart={handleDragStart(index)}
+                            onDragOver={handleDragOver(index)}
+                            onDragEnd={handleDragEnd}
+                            onDrop={handleDrop(index)}
+                            isDragOver={dragOverIndex === index}
                         />
                     ))
                 )}
             </div>
 
-            <div className="p-4 bg-[var(--theme-surface)] border-t border-[var(--theme-border)] flex justify-between items-center relative">
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="p-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-control-bg)] rounded-lg transition-colors"
-                        title="Settings"
-                    >
-                        <Settings size={20} />
-                    </button>
+            {/* Bottom bar */}
+            <div className="px-3 py-2.5 glass-strong flex justify-between items-center relative z-10">
+                <div className="flex items-center gap-1">
+                    <Tooltip text="Settings">
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="window-btn"
+                        >
+                            <Settings size={18} />
+                        </button>
+                    </Tooltip>
+                    {accounts.length > 0 && (
+                        <Tooltip text="Search (Ctrl+F)">
+                            <button
+                                onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                                className="window-btn"
+                            >
+                                <Search size={16} />
+                            </button>
+                        </Tooltip>
+                    )}
                 </div>
 
                 {accounts.length > 0 && (
                     <button
                         onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                        className="p-3 bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-strong)] text-white rounded-full shadow-lg transition-all transform hover:scale-105"
+                        className="fab p-2.5 text-white rounded-full"
                         title="Add Account"
                     >
-                        <Plus size={24} />
+                        <Plus size={20} />
                     </button>
                 )}
             </div>
@@ -767,9 +943,25 @@ function App() {
                 />
             )}
 
+            <ContextMenuContainer />
+            <Confetti active={showConfetti} onDone={() => setShowConfetti(false)} />
             <ToastContainer />
         </div>
     );
+}
+
+function loadSavedOrder(): string[] {
+    try {
+        const raw = localStorage.getItem('axiam_account_order');
+        if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return [];
+}
+
+function saveOrder(order: string[]) {
+    try {
+        localStorage.setItem('axiam_account_order', JSON.stringify(order));
+    } catch { /* ignore */ }
 }
 
 function isBirthday(createdAt?: string): boolean {

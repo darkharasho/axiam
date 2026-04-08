@@ -16,8 +16,12 @@ type SettingsPayload = {
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 350;
+const EXIT_MS = 300;
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+    const [visible, setVisible] = useState(false);
+    const [closing, setClosing] = useState(false);
+    const previewThemeRef = useRef<string | null>(null);
     const [gw2Path, setGw2Path] = useState('');
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
@@ -27,6 +31,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const saveTimerRef = useRef<number | null>(null);
     const pendingSaveRef = useRef<{ payload: SettingsPayload; snapshot: string } | null>(null);
     const lastSavedSnapshotRef = useRef('');
+
+    // Show/hide lifecycle
+    useEffect(() => {
+        if (isOpen) {
+            setVisible(true);
+            setClosing(false);
+        }
+    }, [isOpen]);
+
+    const animateClose = () => {
+        if (closing) return;
+        flushPendingSave();
+        setClosing(true);
+        setTimeout(() => {
+            setVisible(false);
+            setClosing(false);
+            onClose();
+        }, EXIT_MS);
+    };
 
     const buildPayload = (): SettingsPayload => ({
         gw2Path,
@@ -52,11 +75,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         }
         pendingSaveRef.current = null;
         void commitSave(pending.payload, pending.snapshot);
-    };
-
-    const handleClose = () => {
-        flushPendingSave();
-        onClose();
     };
 
     useEffect(() => {
@@ -154,7 +172,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    if (!isOpen) return null;
+    if (!visible) return null;
 
     const DiscordIcon = () => (
         <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
@@ -163,47 +181,60 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     );
 
     return (
-        <div className="fixed left-0 right-0 bottom-0 top-9 z-50 border-t border-[var(--theme-border)]">
-            <button className="absolute inset-0 bg-[var(--theme-overlay)] backdrop-blur-[1px]" onClick={handleClose} aria-label="Close Settings Pane" />
-            <div className="absolute right-0 top-0 h-full w-full max-w-md bg-[var(--theme-surface)] border-l border-[var(--theme-border)] shadow-2xl flex flex-col overflow-hidden">
-                <div className="flex justify-between items-center px-6 py-4 border-b border-[var(--theme-border)] bg-[var(--theme-surface)] shrink-0">
-                    <h2 className="text-xl font-bold text-white">Settings</h2>
-                    <button onClick={handleClose} className="text-[var(--theme-text-muted)] hover:text-white transition-colors">
-                        <X size={24} />
+        <div className="fixed left-0 right-0 bottom-0 top-9 z-50">
+            <button
+                className={`absolute inset-0 ${closing ? 'modal-fade-out' : 'modal-fade-in'}`}
+                style={{ background: 'var(--theme-overlay)', backdropFilter: 'blur(2px)' }}
+                onClick={animateClose}
+                aria-label="Close Settings"
+            />
+            <div
+                className={`absolute right-0 top-0 h-full w-full max-w-md flex flex-col overflow-hidden ${closing ? 'modal-slide-out-right' : 'modal-slide-in'}`}
+                style={{ background: 'var(--theme-surface)', borderLeft: '1px solid var(--theme-border)' }}
+            >
+                {/* Header */}
+                <div className="flex justify-between items-center px-5 py-3.5 border-b border-[var(--theme-border)] shrink-0">
+                    <h2 className="text-lg font-bold text-white">Settings</h2>
+                    <button onClick={animateClose} className="titlebar-btn p-1.5">
+                        <X size={18} />
                     </button>
                 </div>
 
-                <div className="space-y-4 overflow-y-auto p-6">
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-1">Guild Wars 2 Path</label>
-                        <div className="flex space-x-2">
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                    {/* GW2 Path */}
+                    <div className="modal-content-reveal" style={{ animationDelay: '50ms' }}>
+                        <label className="section-label mb-1.5 block">Guild Wars 2 Path</label>
+                        <div className="flex gap-2">
                             <input
                                 type="text"
                                 value={gw2Path}
                                 onChange={(e) => setGw2Path(e.target.value)}
-                                className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[var(--theme-gold)] transition-colors text-sm select-text"
+                                className="input-glass text-sm select-text flex-1"
                                 placeholder="/path/to/Gw2-64.exe"
                             />
                             <button
                                 type="button"
                                 onClick={() => { void handleAutoLocateGw2Path(); }}
                                 disabled={isLocatingGw2Path}
-                                className="px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] disabled:opacity-60 disabled:cursor-not-allowed text-[var(--theme-text)] transition-colors text-xs whitespace-nowrap"
+                                className="btn-surface px-3 py-2 text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Attempt to auto-locate Guild Wars 2 executable"
                             >
                                 {isLocatingGw2Path ? 'Locating...' : 'Auto Locate'}
                             </button>
                         </div>
-                        <p className="text-xs text-[var(--theme-text-dim)] mt-1">Full path to the executable (e.g. C:\Games\Guild Wars 2\Gw2-64.exe or /usr/bin/gw2)</p>
-                        <p className="text-xs text-[var(--theme-text-dim)] mt-1">If set, launch uses this executable directly. If empty, launch defaults to Steam.</p>
+                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light leading-relaxed">
+                            Full path to the executable. If empty, launch defaults to Steam.
+                        </p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-1">Master Password Prompt</label>
+                    {/* Master Password Prompt */}
+                    <div className="modal-content-reveal" style={{ animationDelay: '100ms' }}>
+                        <label className="section-label mb-1.5 block">Master Password Prompt</label>
                         <select
                             value={masterPasswordPrompt}
                             onChange={(e) => setMasterPasswordPrompt(e.target.value as 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never')}
-                            className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[var(--theme-gold)] transition-colors text-sm select-text"
+                            className="input-glass input-glass-select text-sm select-text"
                         >
                             <option value="every_time">Every time</option>
                             <option value="daily">Once a day</option>
@@ -213,48 +244,73 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-1">Theme</label>
-                        <select
-                            value={themeId}
-                            onChange={(e) => {
-                                setThemeId(e.target.value);
-                                applyTheme(e.target.value);
-                            }}
-                            className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[var(--theme-gold)] transition-colors text-sm select-text"
-                        >
-                            {GW2_THEMES.map((theme) => (
-                                <option key={theme.id} value={theme.id}>
-                                    {theme.name}
-                                </option>
-                            ))}
-                        </select>
-                        <p className="text-xs text-[var(--theme-text-dim)] mt-1">
+                    {/* Theme */}
+                    <div className="modal-content-reveal" style={{ animationDelay: '150ms' }}>
+                        <label className="section-label mb-2 block">Theme</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {GW2_THEMES.map((theme) => {
+                                const bg = theme.vars['--theme-bg'] || '#111';
+                                const accent = theme.vars['--theme-accent-strong'] || theme.vars['--theme-accent'] || '#666';
+                                const isActive = theme.id === themeId;
+                                return (
+                                    <button
+                                        key={theme.id}
+                                        type="button"
+                                        onClick={() => {
+                                            previewThemeRef.current = null;
+                                            setThemeId(theme.id);
+                                            applyTheme(theme.id);
+                                        }}
+                                        onMouseEnter={() => {
+                                            previewThemeRef.current = themeId;
+                                            applyTheme(theme.id);
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (previewThemeRef.current !== null) {
+                                                applyTheme(previewThemeRef.current);
+                                                previewThemeRef.current = null;
+                                            }
+                                        }}
+                                        className={`theme-swatch ${isActive ? 'theme-swatch--active' : ''}`}
+                                        title={theme.name}
+                                        style={{
+                                            background: `linear-gradient(135deg, ${bg}, ${accent})`,
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+                        <p className="text-[11px] text-[var(--theme-text-muted)] font-medium">
+                            {GW2_THEMES.find((theme) => theme.id === themeId)?.name}
+                        </p>
+                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-0.5 font-light">
                             {GW2_THEMES.find((theme) => theme.id === themeId)?.description}
                         </p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-2">Diagnostics</label>
+                    {/* Diagnostics */}
+                    <div className="modal-content-reveal" style={{ animationDelay: '200ms' }}>
+                        <label className="section-label mb-2 block">Diagnostics</label>
                         <button
                             type="button"
                             onClick={() => { void handleExportDiagnostics(); }}
                             disabled={isExportingDiagnostics}
-                            className="w-full px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] disabled:opacity-60 disabled:cursor-not-allowed text-[var(--theme-text)] transition-colors text-sm"
+                            className="btn-surface w-full px-3 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isExportingDiagnostics ? 'Exporting Diagnostics...' : 'Export Diagnostics'}
+                            {isExportingDiagnostics ? 'Exporting...' : 'Export Diagnostics'}
                         </button>
-                        <p className="text-xs text-[var(--theme-text-dim)] mt-1">
-                            Creates a support file with runtime info and recent logs, then opens its location.
+                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light">
+                            Creates a support file with runtime info and recent logs.
                         </p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--theme-text-muted)] mb-2">Community</label>
+                    {/* Community */}
+                    <div className="modal-content-reveal" style={{ animationDelay: '250ms' }}>
+                        <label className="section-label mb-2 block">Community</label>
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 onClick={() => { void window.api.openExternal('https://discord.gg/UjzMXMGXEg'); }}
-                                className="px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)] transition-colors text-sm inline-flex items-center justify-center gap-2"
+                                className="btn-surface px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2"
                                 title="Open Discord"
                             >
                                 <DiscordIcon />
@@ -262,7 +318,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                             </button>
                             <button
                                 onClick={() => { void window.api.openExternal('https://github.com/darkharasho/axiam'); }}
-                                className="px-3 py-2 rounded-lg bg-[var(--theme-control-bg)] hover:bg-[var(--theme-control-hover)] text-[var(--theme-text)] transition-colors text-sm inline-flex items-center justify-center gap-2"
+                                className="btn-surface px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2"
                                 title="Open GitHub"
                             >
                                 <Github size={15} />
@@ -271,11 +327,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center mt-6">
-                        <span className="text-xs text-[var(--theme-text-dim)]">Settings save automatically.</span>
+                    {/* Footer */}
+                    <div className="flex justify-between items-center pt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>
+                        <span className="text-[10px] text-[var(--theme-text-dim)] font-light">Auto-saves</span>
                         <button
-                            onClick={handleClose}
-                            className="px-4 py-2 rounded-lg text-[var(--theme-text)] hover:bg-[var(--theme-control-bg)] transition-colors"
+                            onClick={animateClose}
+                            className="btn-ghost px-4 py-2 text-sm"
                         >
                             Close
                         </button>

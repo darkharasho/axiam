@@ -21,61 +21,116 @@ const MasterPasswordModal: React.FC<MasterPasswordModalProps> = ({ mode, onSubmi
     };
 
     return (
-        <div className="flex flex-col items-center justify-center h-full p-4">
-            <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-xl p-8 w-full max-w-sm shadow-2xl flex flex-col items-center">
-                <div className="bg-[var(--theme-accent-soft)] p-4 rounded-full mb-6">
-                    <Lock size={32} className="text-[var(--theme-gold-strong)]" />
+        <div className="flex flex-col items-center justify-center h-full p-6 relative overflow-hidden">
+            {/* Vignette overlay */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)',
+                }}
+            />
+
+            {/* Ambient glow behind card */}
+            <div
+                className="absolute pointer-events-none"
+                style={{
+                    width: '300px',
+                    height: '300px',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'radial-gradient(circle, var(--theme-accent-soft) 0%, transparent 70%)',
+                    animation: 'lockGlow 3s ease-in-out infinite',
+                    filter: 'blur(40px)',
+                }}
+            />
+
+            {/* Logo watermark */}
+            <div
+                className="absolute pointer-events-none opacity-[0.06]"
+                style={{
+                    width: '280px',
+                    height: '280px',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -55%)',
+                    background: 'radial-gradient(circle at 30% 25%, var(--theme-gold-strong) 0%, var(--theme-accent) 100%)',
+                    WebkitMaskImage: "url('/img/AxiAM.svg')",
+                    WebkitMaskRepeat: 'no-repeat',
+                    WebkitMaskPosition: 'center',
+                    WebkitMaskSize: 'contain',
+                    maskImage: "url('/img/AxiAM.svg')",
+                    maskRepeat: 'no-repeat',
+                    maskPosition: 'center',
+                    maskSize: 'contain',
+                    animation: 'lockFloat 4s ease-in-out infinite',
+                }}
+            />
+
+            <div className="glass-strong rounded-2xl p-8 w-full max-w-sm flex flex-col items-center relative z-10 modal-content-reveal">
+                {/* Floating lock icon */}
+                <div
+                    className="rounded-2xl p-4 mb-5"
+                    style={{
+                        background: 'linear-gradient(135deg, var(--theme-accent-soft), color-mix(in srgb, var(--theme-accent) 15%, transparent))',
+                        animation: 'lockFloat 3s ease-in-out infinite',
+                        boxShadow: '0 0 30px 8px var(--theme-accent-soft)',
+                    }}
+                >
+                    <Lock size={28} className="text-[var(--theme-gold-strong)]" />
                 </div>
 
-                <h2 className="text-2xl font-bold text-white mb-2">
-                    {mode === 'set' ? 'Setup Master Password' : 'Welcome Back'}
+                <h2 className="text-xl font-bold text-white mb-1" style={{ fontFamily: '"Cinzel", serif' }}>
+                    {mode === 'set' ? 'Create Vault' : 'Welcome Back'}
                 </h2>
 
-                <p className="text-[var(--theme-text-muted)] text-center mb-6 text-sm">
+                {/* Decorative line */}
+                <div className="w-12 h-px mb-4 mt-1" style={{ background: 'linear-gradient(90deg, transparent, var(--theme-gold), transparent)' }} />
+
+                <p className="text-[var(--theme-text-muted)] text-center mb-6 text-[13px] leading-relaxed font-light">
                     {mode === 'set'
-                        ? 'Welcome! Please create a secure master password to encrypt your account data. If you lose this, your data cannot be recovered.'
-                        : 'Enter your master password to unlock your accounts.'}
+                        ? 'Create a master password to encrypt your account data. This cannot be recovered if lost.'
+                        : 'Enter your master password to unlock.'}
                 </p>
 
-                <form onSubmit={handleSubmit} className="w-full space-y-4">
-                    <div>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--theme-gold)] transition-colors text-center text-lg tracking-widest"
-                            placeholder="Master Password"
-                            required
-                        />
-                    </div>
+                <form onSubmit={handleSubmit} className="w-full space-y-3">
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="input-glass text-center text-lg tracking-[0.2em] py-3"
+                        placeholder="Master Password"
+                        required
+                        autoFocus
+                    />
 
                     {mode === 'set' && (
-                        <div>
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--theme-gold)] transition-colors text-center text-lg tracking-widest mt-2"
-                                placeholder="Confirm Password"
-                                required
-                            />
-                        </div>
+                        <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="input-glass text-center text-lg tracking-[0.2em] py-3"
+                            placeholder="Confirm Password"
+                            required
+                        />
                     )}
 
-                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                    {error && (
+                        <p className="text-[var(--theme-danger-text)] text-xs text-center font-medium">{error}</p>
+                    )}
 
                     <button
                         type="submit"
-                        className="w-full py-3 bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-strong)] text-white rounded-lg transition-colors font-bold mt-4"
+                        className="btn-primary w-full py-3 text-sm font-semibold mt-2"
                     >
-                        {mode === 'set' ? 'Create Vault' : 'Unlock Vault'}
+                        {mode === 'set' ? 'Create Vault' : 'Unlock'}
                     </button>
 
                     {mode === 'verify' && (
                         <button
                             type="button"
                             onClick={() => window.api.resetApp()}
-                            className="w-full py-2 bg-red-900/50 hover:bg-red-800 text-red-200 rounded-lg transition-colors text-xs mt-2"
+                            className="btn-danger w-full py-2 text-xs mt-1"
                         >
                             Hard Reset (Clear Data)
                         </button>

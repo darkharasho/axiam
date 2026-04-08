@@ -49,9 +49,9 @@ export function ToastContainer() {
             {toasts.map((toast) => (
                 <div
                     key={toast.id}
-                    className={`pointer-events-auto px-3 py-1.5 rounded-md shadow-lg text-xs transition-all duration-300 ${
-                        toast.exiting ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
-                    } bg-[var(--theme-surface-soft)] text-[var(--theme-text)] border border-[var(--theme-border)]`}
+                    className={`pointer-events-auto px-4 py-2 rounded-xl shadow-lg text-xs font-medium glass ${
+                        toast.exiting ? 'toast-exit' : 'toast-enter'
+                    }`}
                 >
                     {toast.message}
                 </div>
