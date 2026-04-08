@@ -4,7 +4,7 @@ interface TooltipProps {
     text: string;
     children: React.ReactElement;
     delay?: number;
-    position?: 'top' | 'bottom';
+    position?: 'top' | 'bottom' | 'right';
 }
 
 export default function Tooltip({ text, children, delay = 400, position = 'top' }: TooltipProps) {
@@ -17,10 +17,17 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
         timerRef.current = window.setTimeout(() => {
             if (triggerRef.current) {
                 const rect = triggerRef.current.getBoundingClientRect();
-                setCoords({
-                    x: rect.left + rect.width / 2,
-                    y: position === 'top' ? rect.top : rect.bottom,
-                });
+                if (position === 'right') {
+                    setCoords({
+                        x: rect.right,
+                        y: rect.top + rect.height / 2,
+                    });
+                } else {
+                    setCoords({
+                        x: rect.left + rect.width / 2,
+                        y: position === 'top' ? rect.top : rect.bottom,
+                    });
+                }
             }
             setVisible(true);
         }, delay);
@@ -56,11 +63,13 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
                     className="tooltip-bubble"
                     style={{
                         position: 'fixed',
-                        left: coords.x,
-                        top: position === 'top' ? coords.y - 6 : coords.y + 6,
-                        transform: position === 'top'
-                            ? 'translate(-50%, -100%)'
-                            : 'translate(-50%, 0)',
+                        left: position === 'right' ? coords.x + 8 : coords.x,
+                        top: position === 'right' ? coords.y : (position === 'top' ? coords.y - 6 : coords.y + 6),
+                        transform: position === 'right'
+                            ? 'translate(0, -50%)'
+                            : position === 'top'
+                                ? 'translate(-50%, -100%)'
+                                : 'translate(-50%, 0)',
                         zIndex: 99999,
                     }}
                 >

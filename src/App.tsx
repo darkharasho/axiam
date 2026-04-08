@@ -8,9 +8,10 @@ import WhatsNewScreen from './components/WhatsNewScreen.tsx';
 import { applyTheme } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
-import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search } from 'lucide-react';
+import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search, Palette } from 'lucide-react';
 import AmbientParticles from './components/AmbientParticles.tsx';
 import SkeletonCards from './components/SkeletonCards.tsx';
+import { GW2_THEMES } from './themes/themes';
 import { ContextMenuContainer } from './components/ContextMenu.tsx';
 import Confetti from './components/Confetti.tsx';
 import Tooltip from './components/Tooltip.tsx';
@@ -61,6 +62,7 @@ function App() {
     const [showConfetti, setShowConfetti] = useState(false);
     const hasEverLaunchedRef = useRef(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [currentThemeId, setCurrentThemeId] = useState('blood_legion');
 
     useEffect(() => {
         if (!window.api) {
@@ -73,7 +75,9 @@ function App() {
             setIsShowcaseMode(false);
         });
         window.api.getSettings().then((settings) => {
-            applyTheme(settings?.themeId || 'blood_legion');
+            const themeId = settings?.themeId || 'blood_legion';
+            applyTheme(themeId);
+            setCurrentThemeId(themeId);
         });
         checkMasterPassword().finally(() => setIsAuthChecking(false));
     }, []);
@@ -794,126 +798,186 @@ function App() {
         );
     }
 
+    const cycleTheme = () => {
+        const currentIndex = GW2_THEMES.findIndex((t) => t.id === currentThemeId);
+        const nextIndex = (currentIndex + 1) % GW2_THEMES.length;
+        const next = GW2_THEMES[nextIndex];
+        setCurrentThemeId(next.id);
+        applyTheme(next.id);
+        // Also persist via settings
+        window.api.getSettings().then((settings) => {
+            window.api.saveSettings({ ...settings, themeId: next.id } as any);
+        });
+    };
+
     return (
         <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`}>
             <div className="axiam-mark" aria-hidden="true" />
             <AmbientParticles />
 
-            <TitleBar />
-
-            {/* Search bar */}
-            {searchOpen && (
-                <div className={`px-3 pt-2 relative z-10 ${searchOpen ? 'search-bar-enter' : ''}`}>
-                    <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5">
-                        <Search size={14} className="text-[var(--theme-text-dim)] shrink-0" />
-                        <input
-                            ref={searchInputRef}
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                    setSearchOpen(false);
-                                    setSearchQuery('');
-                                }
-                            }}
-                            className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-dim)] select-text"
-                            placeholder="Search accounts..."
-                            autoFocus
-                        />
-                        <button
-                            onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-                            className="window-btn !w-6 !h-6"
-                        >
-                            <X size={12} />
-                        </button>
-                    </div>
+            {/* Compact title bar — just drag region + window controls */}
+            <div
+                className={`h-8 titlebar flex justify-between items-center px-2 select-none relative z-12 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
+                style={{ WebkitAppRegion: 'drag' } as any}
+            >
+                <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-dim)]">
+                    {showDevChrome ? (
+                        <span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-amber-300">
+                            Dev
+                        </span>
+                    ) : (
+                        <span className="font-light opacity-60">v{appVersion}</span>
+                    )}
+                    {renderUpdateIndicator()}
+                </span>
+                <div className="flex items-center gap-0.5 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                    <button onClick={minimize} className="window-btn !w-6 !h-6"><Minus size={12} /></button>
+                    <button onClick={maximize} className="window-btn !w-6 !h-6"><Square size={9} /></button>
+                    <button onClick={close} className="window-btn window-btn--close !w-6 !h-6"><X size={12} /></button>
                 </div>
-            )}
-
-            {/* Account list */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 relative z-10">
-                {accountsLoading ? (
-                    <SkeletonCards count={3} />
-                ) : accounts.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full empty-state">
-                        <div className="empty-state-icon mb-4">
-                            <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center">
-                                <Plus size={28} className="text-[var(--theme-text-dim)]" />
-                            </div>
-                        </div>
-                        <p className="text-sm text-[var(--theme-text-dim)] mb-4 font-light">No accounts yet</p>
-                        <button
-                            onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                            className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2"
-                        >
-                            <Plus size={16} /> Add Account
-                        </button>
-                    </div>
-                ) : filteredAccounts.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-dim)]">
-                        <p className="text-sm font-light">No matching accounts</p>
-                    </div>
-                ) : (
-                    filteredAccounts.map((account, index) => (
-                        <AccountCard
-                            key={account.id}
-                            account={account}
-                            onLaunch={handleLaunchWithConfetti}
-                            onStop={handleStop}
-                            isActiveProcess={activeAccountIds.includes(account.id)}
-                            status={accountStatuses[account.id] ?? 'idle'}
-                            statusCertainty={accountStatusCertainty[account.id]}
-                            accountApiName={accountApiNames[account.id] || ''}
-                            isBirthday={isBirthday(accountApiCreatedAt[account.id])}
-                            onEdit={handleEditAccount}
-                            onDelete={handleDeleteFromMenu}
-                            index={index}
-                            selected={index === selectedIndex}
-                            onSelect={() => setSelectedIndex(index)}
-                            hasLocalDat={accountHasLocalDat[account.id] ?? false}
-                            onDragStart={handleDragStart(index)}
-                            onDragOver={handleDragOver(index)}
-                            onDragEnd={handleDragEnd}
-                            onDrop={handleDrop(index)}
-                            isDragOver={dragOverIndex === index}
-                        />
-                    ))
-                )}
             </div>
 
-            {/* Bottom bar */}
-            <div className="px-3 py-2.5 glass-strong flex justify-between items-center relative z-10">
-                <div className="flex items-center gap-1">
-                    <Tooltip text="Settings">
+            {/* Main layout: sidebar + content */}
+            <div className="flex flex-1 overflow-hidden">
+                {/* Sidebar */}
+                <nav className="sidebar">
+                    <img src="img/AxiAM.png" alt="AxiAM" className="sidebar-logo" />
+
+                    <Tooltip text="Add Account (Ctrl+N)" position="right">
                         <button
-                            onClick={() => setIsSettingsOpen(true)}
-                            className="window-btn"
+                            onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
+                            className="sidebar-btn sidebar-btn--accent"
                         >
-                            <Settings size={18} />
+                            <Plus size={16} />
                         </button>
                     </Tooltip>
+
                     {accounts.length > 0 && (
-                        <Tooltip text="Search (Ctrl+F)">
+                        <Tooltip text="Search (Ctrl+F)" position="right">
                             <button
                                 onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => searchInputRef.current?.focus(), 50); }}
-                                className="window-btn"
+                                className={`sidebar-btn ${searchOpen ? 'sidebar-btn--active' : ''}`}
                             >
-                                <Search size={16} />
+                                <Search size={15} />
                             </button>
                         </Tooltip>
                     )}
-                </div>
 
-                {accounts.length > 0 && (
-                    <button
-                        onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                        className="fab p-2.5 text-white rounded-full"
-                        title="Add Account"
-                    >
-                        <Plus size={20} />
-                    </button>
-                )}
+                    <div className="sidebar-divider" />
+
+                    <Tooltip text="What's New" position="right">
+                        <button
+                            onClick={() => { void openWhatsNew(); }}
+                            className="sidebar-btn"
+                        >
+                            <Sparkles size={14} />
+                        </button>
+                    </Tooltip>
+
+                    <Tooltip text="Cycle Theme" position="right">
+                        <button
+                            onClick={cycleTheme}
+                            className="sidebar-btn"
+                        >
+                            <Palette size={15} />
+                        </button>
+                    </Tooltip>
+
+                    <div className="flex-1" />
+
+                    <Tooltip text="Settings" position="right">
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className={`sidebar-btn ${isSettingsOpen ? 'sidebar-btn--active' : ''}`}
+                        >
+                            <Settings size={16} />
+                        </button>
+                    </Tooltip>
+                </nav>
+
+                {/* Content area */}
+                <div className="flex-1 flex flex-col overflow-hidden relative">
+                    {/* Search bar */}
+                    {searchOpen && (
+                        <div className={`px-3 pt-2 relative z-10 ${searchOpen ? 'search-bar-enter' : ''}`}>
+                            <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5">
+                                <Search size={14} className="text-[var(--theme-text-dim)] shrink-0" />
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Escape') {
+                                            setSearchOpen(false);
+                                            setSearchQuery('');
+                                        }
+                                    }}
+                                    className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-dim)] select-text"
+                                    placeholder="Search accounts..."
+                                    autoFocus
+                                />
+                                <button
+                                    onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                                    className="window-btn !w-6 !h-6"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Account list */}
+                    <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 relative z-10">
+                        {accountsLoading ? (
+                            <SkeletonCards count={3} />
+                        ) : accounts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full empty-state">
+                                <div className="empty-state-icon mb-4">
+                                    <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center">
+                                        <Plus size={28} className="text-[var(--theme-text-dim)]" />
+                                    </div>
+                                </div>
+                                <p className="text-sm text-[var(--theme-text-dim)] mb-4 font-light">No accounts yet</p>
+                                <button
+                                    onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
+                                    className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2"
+                                >
+                                    <Plus size={16} /> Add Account
+                                </button>
+                            </div>
+                        ) : filteredAccounts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-dim)]">
+                                <p className="text-sm font-light">No matching accounts</p>
+                            </div>
+                        ) : (
+                            filteredAccounts.map((account, index) => (
+                                <AccountCard
+                                    key={account.id}
+                                    account={account}
+                                    onLaunch={handleLaunchWithConfetti}
+                                    onStop={handleStop}
+                                    isActiveProcess={activeAccountIds.includes(account.id)}
+                                    status={accountStatuses[account.id] ?? 'idle'}
+                                    statusCertainty={accountStatusCertainty[account.id]}
+                                    accountApiName={accountApiNames[account.id] || ''}
+                                    isBirthday={isBirthday(accountApiCreatedAt[account.id])}
+                                    onEdit={handleEditAccount}
+                                    onDelete={handleDeleteFromMenu}
+                                    index={index}
+                                    selected={index === selectedIndex}
+                                    onSelect={() => setSelectedIndex(index)}
+                                    hasLocalDat={accountHasLocalDat[account.id] ?? false}
+                                    onDragStart={handleDragStart(index)}
+                                    onDragOver={handleDragOver(index)}
+                                    onDragEnd={handleDragEnd}
+                                    onDrop={handleDrop(index)}
+                                    isDragOver={dragOverIndex === index}
+                                />
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
 
             <AddAccountModal

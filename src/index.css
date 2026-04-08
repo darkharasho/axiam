@@ -1095,6 +1095,92 @@ body::after {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-gold) 30%, transparent) !important;
 }
 
+/* ───────────────── Sidebar ───────────────── */
+
+.sidebar {
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 8px;
+  gap: 2px;
+  background: color-mix(in srgb, var(--theme-surface) 70%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border-right: 1px solid color-mix(in srgb, var(--theme-border) 50%, transparent);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 11;
+}
+
+.sidebar-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--theme-text-dim);
+  transition: all 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sidebar-btn:hover {
+  color: var(--theme-text);
+  background: var(--theme-control-bg);
+}
+
+.sidebar-btn--active {
+  color: var(--theme-text);
+  background: var(--theme-control-bg);
+}
+
+.sidebar-btn--active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 0 3px 3px 0;
+  background: var(--theme-accent-strong);
+}
+
+.sidebar-btn--accent {
+  color: white;
+  background: linear-gradient(135deg, var(--theme-accent), var(--theme-accent-strong));
+  box-shadow: 0 2px 8px -2px var(--theme-accent-soft);
+}
+
+.sidebar-btn--accent:hover {
+  color: white;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px -2px var(--theme-accent-soft);
+}
+
+.sidebar-divider {
+  width: 20px;
+  height: 1px;
+  background: color-mix(in srgb, var(--theme-border) 50%, transparent);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  margin-bottom: 6px;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.sidebar-logo:hover {
+  opacity: 1;
+}
+
 /* ───────────────── Reduced motion ───────────────── */
 
 @media (prefers-reduced-motion: reduce) {
