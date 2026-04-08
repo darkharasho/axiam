@@ -1,27 +1,41 @@
 # Release Notes
 
-Version v1.0.0 — March 28, 2026
+Version v1.1.0 — April 8, 2026
 
-## AxiAM
+## Full UI Redesign
 
-GW2AM is now AxiAM. New name, new branding, new title bar with the Cinzel font. Your existing settings and accounts migrate automatically from the old GW2AM data directory on first launch.
+The entire interface has been rebuilt around a new "Obsidian Glass" design language. Every surface now uses layered glassmorphism with backdrop blur, and all transitions are choreographed CSS animations. New Outfit font for body text, Cinzel for branding. Subtle ambient floating particles in the background.
 
-## Save Login
+## Left Sidebar Navigation
 
-Completely reworked how login saving works. Instead of passing credentials as launch arguments (which was fragile and got stripped by the client), AxiAM now saves and swaps `Local.dat` files per account. You can save your login from the account card, and it auto-saves on first login. Re-save and clear options are in account settings.
+The bottom bar is gone. A slim glass sidebar on the left edge holds the logo, add account, search, what's new, theme cycling, and settings. Frees up vertical space for the account list.
 
-## No More UI Automation
+## Account Cards
 
-The old auto-login system that tried to type credentials into the game client is gone. It never worked reliably on Linux and was always finicky on Windows. Over 2,000 lines of automation code removed. The Local.dat approach above replaces it entirely.
+Cards now show a colored avatar initial, an expandable detail panel (API name, launch args, login status), and animated status dots. Right-click any card for a context menu with launch, edit, copy nickname, and delete.
 
-## QoL Improvements
+## Drag to Reorder
 
-- Toast notifications are now compact, centered above the bottom bar, and use neutral colors instead of the old red styling.
-- The "AM" text in the title bar now uses your theme's accent color.
-- `Local.dat` auto-saves on game exit so your session stays fresh.
+Drag account cards to rearrange them. Order is saved automatically and persists across sessions.
 
-## Fixes
+## Search and Keyboard Navigation
 
-- Fixed a migration bug that checked for a directory instead of `config.json`.
-- Launch args like `-provider` are no longer incorrectly stripped.
-- Logo icon properly shows in the title bar again.
+Ctrl+F opens a search bar that filters accounts by nickname or API name. Arrow keys navigate, Enter launches or stops the selected account, Escape dismisses.
+
+## Quick Theme Cycling
+
+Click the palette icon in the sidebar to cycle through all 16 GW2 themes. Theme switches now crossfade smoothly instead of snapping.
+
+## New Components
+
+- Tooltips with hover delay on all interactive buttons.
+- Skeleton loading cards while accounts load.
+- Confetti burst on your very first successful launch.
+
+## Modal Animations
+
+All modals and screens (settings, add account, what's new, master password) now animate in and out instead of popping.
+
+## Master Password Screen
+
+The unlock screen now has a vignette overlay, radial ambient glow, faint AxiAM watermark, and a gold decorative divider.
