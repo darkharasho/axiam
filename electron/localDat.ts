@@ -5,19 +5,49 @@ import { app } from 'electron';
 const STEAM_APP_ID = '1284210';
 
 /**
+ * Parse Steam's libraryfolders.vdf to get all Steam library paths.
+ */
+export function getSteamLibraryPaths(): string[] {
+  const home = app.getPath('home');
+  const vdfPath = path.join(home, '.local', 'share', 'Steam', 'steamapps', 'libraryfolders.vdf');
+  if (!fs.existsSync(vdfPath)) return [];
+
+  const content = fs.readFileSync(vdfPath, 'utf-8');
+  const paths: string[] = [];
+  // Match "path" entries in the VDF file
+  const pathRegex = /"path"\s+"([^"]+)"/g;
+  let match;
+  while ((match = pathRegex.exec(content)) !== null) {
+    paths.push(match[1]);
+  }
+  return paths;
+}
+
+/**
  * Returns the directory where GW2 stores Local.dat.
- * - Linux: Wine prefix inside Steam compatdata
+ * - Linux: Wine prefix inside Steam compatdata (checks all Steam library folders)
  * - Windows: %AppData%\Guild Wars 2
  */
 export function getGw2DataDirectory(): string | null {
   if (process.platform === 'linux') {
+    const libraryPaths = getSteamLibraryPaths();
+
+    // Also check the default location in case VDF parsing fails
     const home = app.getPath('home');
-    const candidate = path.join(
-      home, '.local', 'share', 'Steam', 'steamapps', 'compatdata',
-      STEAM_APP_ID, 'pfx', 'drive_c', 'users', 'steamuser',
-      'AppData', 'Roaming', 'Guild Wars 2',
-    );
-    return fs.existsSync(candidate) ? candidate : null;
+    const defaultPath = path.join(home, '.local', 'share', 'Steam');
+    if (!libraryPaths.includes(defaultPath)) {
+      libraryPaths.unshift(defaultPath);
+    }
+
+    for (const libPath of libraryPaths) {
+      const candidate = path.join(
+        libPath, 'steamapps', 'compatdata',
+        STEAM_APP_ID, 'pfx', 'drive_c', 'users', 'steamuser',
+        'AppData', 'Roaming', 'Guild Wars 2',
+      );
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
   }
 
   if (process.platform === 'win32') {

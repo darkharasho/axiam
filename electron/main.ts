@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat } from './localDat.js';
+import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat, getSteamLibraryPaths } from './localDat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -644,6 +644,9 @@ function autoLocateGw2ExecutablePath(): { found: boolean; path?: string; message
     const candidates = [
       path.join(home, '.steam', 'steam', 'steamapps', 'common', 'Guild Wars 2', 'Gw2-64.exe'),
       path.join(home, '.local', 'share', 'Steam', 'steamapps', 'common', 'Guild Wars 2', 'Gw2-64.exe'),
+      ...getSteamLibraryPaths().map(libPath =>
+        path.join(libPath, 'steamapps', 'common', 'Guild Wars 2', 'Gw2-64.exe')
+      ),
       '/usr/bin/gw2',
       '/usr/local/bin/gw2',
     ];
