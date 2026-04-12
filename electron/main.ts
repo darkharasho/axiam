@@ -1457,7 +1457,9 @@ ipcMain.handle('launch-account', async (_, id) => {
     ...sanitizedExtraArgs,
   ];
   try {
-    if (gw2Path) {
+    // On Linux, always launch via Steam so Proton handles the Windows executable
+    // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
+    if (gw2Path && process.platform !== 'linux') {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
