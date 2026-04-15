@@ -96,12 +96,11 @@ jobs:
               'url': release_url,
               'description': notes or 'A new version of AxiAM is available!',
               'color': 0xEF4444,
+              'thumbnail': {'url': 'https://raw.githubusercontent.com/darkharasho/axiam/main/public/img/AxiAM-square.png'},
               'footer': {'text': 'AxiAM Release'},
           }
 
           print(json.dumps({
-              'username': 'AxiAM',
-              'avatar_url': 'https://raw.githubusercontent.com/darkharasho/axiam/main/public/img/AxiAM-square.png',
               'embeds': [embed],
           }))
           ")
