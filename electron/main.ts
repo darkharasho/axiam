@@ -983,14 +983,24 @@ const createWindow = () => {
     x: storedWindowState.x,
     y: storedWindowState.y,
     frame: false,
+    ...(process.platform === 'darwin'
+      ? { transparent: false }
+      : { transparent: true, backgroundColor: '#00000000' }),
     icon: appIconPath,
-    // titleBarStyle: 'hidden', 
+    // titleBarStyle: 'hidden',
     resizable: true, // Allow resize but keep default small
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximized-change', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximized-change', false);
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -1015,6 +1025,7 @@ const createWindow = () => {
 
 app.on('ready', () => {
   console.log("User Data Path:", app.getPath('userData'));
+  fs.writeFileSync(path.join(app.getPath('userData'), 'axiom-version'), app.getVersion(), 'utf8');
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.axiam.app');
   }
