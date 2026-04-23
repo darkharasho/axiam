@@ -55,6 +55,7 @@ interface Api {
     minimizeWindow: () => void;
     maximizeWindow: () => void;
     closeWindow: () => void;
+    onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
     resetApp: () => void;
 }
 

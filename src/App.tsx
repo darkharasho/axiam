@@ -63,6 +63,11 @@ function App() {
     const hasEverLaunchedRef = useRef(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [currentThemeId, setCurrentThemeId] = useState('blood_legion');
+    const [maximized, setMaximized] = useState(false);
+
+    useEffect(() => {
+        return window.api?.onMaximizedChange?.((m: boolean) => setMaximized(m));
+    }, []);
 
     useEffect(() => {
         if (!window.api) {
@@ -777,7 +782,7 @@ function App() {
 
     if (isAuthChecking) {
         return (
-            <div className="h-screen w-screen text-white flex flex-col">
+            <div className="h-screen w-screen text-white flex flex-col" style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
                 <TitleBar minimal />
                 <ToastContainer />
             </div>
@@ -786,7 +791,7 @@ function App() {
 
     if (!isUnlocked) {
         return (
-            <div className="h-screen w-screen text-white flex flex-col">
+            <div className="h-screen w-screen text-white flex flex-col" style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
                 <TitleBar minimal />
                 <MasterPasswordModal
                     mode={masterPasswordMode}
@@ -811,7 +816,7 @@ function App() {
     };
 
     return (
-        <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`}>
+        <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`} style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
             <div className="axiam-mark" aria-hidden="true" />
             <AmbientParticles />
 

@@ -59,7 +59,7 @@
       "output": "dist_out",
       "buildResources": "build"
     },
-    "artifactName": "${productName}-${version}.${ext}",
+    "artifactName": "axiam.appimage",
     "publish": {
       "provider": "github",
       "owner": "darkharasho",

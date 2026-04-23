@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  --window-radius: 10px;
   --theme-bg: #0f0c0b;
   --theme-surface: #161313;
   --theme-surface-soft: #211818;
@@ -34,6 +35,10 @@
 
 /* ───────────────── Base ───────────────── */
 
+html {
+  background: transparent;
+}
+
 body {
   @apply text-white overflow-hidden;
   font-family: 'Outfit', system-ui, sans-serif;
@@ -41,6 +46,7 @@ body {
     radial-gradient(circle at 20% 0%, var(--theme-glow-1), transparent 40%),
     radial-gradient(circle at 80% 100%, var(--theme-glow-2), transparent 38%),
     linear-gradient(180deg, var(--theme-body-start) 0%, var(--theme-bg) 100%);
+  border-radius: var(--window-radius);
   user-select: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
