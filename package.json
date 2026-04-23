@@ -1,7 +1,7 @@
 {
   "name": "axiam",
   "private": true,
-  "version": "1.1.7",
+  "version": "1.1.8",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -90,7 +90,8 @@
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
       "differentialPackage": true,
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "runAfterFinish": false
     }
   }
 }
