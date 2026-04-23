@@ -59,7 +59,6 @@
       "output": "dist_out",
       "buildResources": "build"
     },
-    "artifactName": "axiam.appimage",
     "publish": {
       "provider": "github",
       "owner": "darkharasho",
@@ -77,13 +76,15 @@
     "linux": {
       "target": "AppImage",
       "category": "Game",
-      "icon": "build/icons/icon.png"
+      "icon": "build/icons/icon.png",
+      "artifactName": "axiam.AppImage"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "build/icons/icon.ico"
+      "icon": "build/icons/icon.ico",
+      "artifactName": "axiam.exe"
     },
     "nsis": {
       "oneClick": true,
