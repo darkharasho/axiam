@@ -1535,7 +1535,7 @@ ipcMain.handle('launch-account', async (_, id) => {
     return false;
   }
 
-  const launchSettings = (store.get('settings') as { gw2Path?: string } | undefined) || {};
+  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
@@ -1558,8 +1558,7 @@ ipcMain.handle('launch-account', async (_, id) => {
   // Multi-instance gate + mutex preparation.
   const existingGw2Pids = getAllRunningGw2Pids();
   if (existingGw2Pids.length > 0) {
-    const settingsForGate = (store.get('settings') as { allowMultiInstance?: boolean } | undefined) || {};
-    if (!settingsForGate.allowMultiInstance) {
+    if (!launchSettings.allowMultiInstance) {
       logMainWarn('launch', `[mutex] Blocking launch of account=${id}: another GW2 instance is running and allowMultiInstance is off`);
       launchStateMachine.setState(
         id,
