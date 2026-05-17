@@ -1,9 +1,8 @@
 # Release Notes
 
-Version v1.1.10 — May 17, 2026
+Version v1.1.11 — May 17, 2026
 
 ## Fixes
 
-- `-shareArchive` works on Linux now. The launcher used to refuse to start a second GW2 process, which defeated the whole point of the flag. No more "Another GW2 instance is already running" when you actually want multiple clients sharing the archive.
-- Per-account launch detection on Linux no longer hangs for 3 minutes before giving up. The launcher now recognizes GW2 when it's running under Proton (the command line uses Windows-style backslash paths) and passes `-mumble` the way GW2 actually expects, so Steam stops dropping the flag. Accounts that had a saved login were technically launching fine — you just never saw the UI stop spinning.
-- If Steam isn't installed or isn't on `PATH`, the failure now shows up in the diagnostic log instead of silently failing.
+- `-shareArchive` now works on Windows. The launcher used to route Windows accounts through Steam's `steam://` URI, which only ever runs one copy of GW2 — so launching a second account silently killed the first one's login panel. The launcher now finds `Gw2-64.exe` automatically (Program Files, `C:\Guild Wars 2`, or any Steam library on any drive) and spawns it directly. No more "the first window just disappeared" when opening multiple clients.
+- You don't have to point the launcher at `Gw2-64.exe` manually anymore. If you haven't set a path in settings, it'll find your install on its own — works for both the standalone arena.net installer and Steam-installed copies.
