@@ -108,4 +108,66 @@ describe('resolveProtonContext', () => {
     const ctx = resolveProtonContext(home, [lib], fs);
     expect(ctx!.protonPath).toBe(`${lib}/steamapps/common/Proton 9.0/proton`);
   });
+
+  it('resolves Proton path via compatdata/config_info', () => {
+    const home = '/home/u';
+    const lib = `${home}/.local/share/Steam`;
+    const protonInstallDir = `/opt/steam/Proton 8.0-via-config`;
+    const configInfoPath = `${lib}/steamapps/compatdata/1284210/config_info`;
+    const files = new Set([
+      `${lib}/steamapps/compatdata/1284210`,
+      configInfoPath,
+      `${protonInstallDir}/proton`,
+    ]);
+    const fs: Filesystem = {
+      existsSync: (p) => files.has(p),
+      readFileSync: (p) => p === configInfoPath ? `${protonInstallDir}\nsome-arg\n` : '',
+      readdirSync: () => [],
+    };
+    const ctx = resolveProtonContext(home, [lib], fs);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.protonPath).toBe(`${protonInstallDir}/proton`);
+  });
+
+  it('falls back to compatibilitytools.d when no Proton in steamapps/common', () => {
+    const home = '/home/u';
+    const lib = `${home}/.local/share/Steam`;
+    const geProtonDir = `${home}/.steam/root/compatibilitytools.d/GE-Proton9-18`;
+    const files = new Set([
+      `${lib}/steamapps/compatdata/1284210`,
+      `${geProtonDir}/proton`,
+    ]);
+    const fs: Filesystem = {
+      existsSync: (p) => files.has(p),
+      readFileSync: () => '',
+      readdirSync: (dir) => {
+        if (dir === `${home}/.steam/root/compatibilitytools.d`) return ['GE-Proton9-18'];
+        return [];
+      },
+    };
+    const ctx = resolveProtonContext(home, [lib], fs);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.protonPath).toBe(`${geProtonDir}/proton`);
+  });
+
+  it('prefers config_info over steamapps/common scan', () => {
+    const home = '/home/u';
+    const lib = `${home}/.local/share/Steam`;
+    const configInfoProtonDir = `/opt/steam/ProtonFromConfigInfo`;
+    const configInfoPath = `${lib}/steamapps/compatdata/1284210/config_info`;
+    const files = new Set([
+      `${lib}/steamapps/compatdata/1284210`,
+      configInfoPath,
+      `${configInfoProtonDir}/proton`,
+      `${lib}/steamapps/common/Proton 9.0/proton`,
+    ]);
+    const fs: Filesystem = {
+      existsSync: (p) => files.has(p),
+      readFileSync: (p) => p === configInfoPath ? `${configInfoProtonDir}\n` : '',
+      readdirSync: (dir) => dir.endsWith('steamapps/common') ? ['Proton 9.0'] : [],
+    };
+    const ctx = resolveProtonContext(home, [lib], fs);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.protonPath).toBe(`${configInfoProtonDir}/proton`);
+  });
 });

@@ -112,10 +112,15 @@ export function resolveProtonContext(
   steamLibraryPaths: string[],
   filesystem: Filesystem,
 ): ProtonContext | null {
+  const compatToolsRoots = [
+    path.join(home, '.steam', 'root', 'compatibilitytools.d'),
+    path.join(home, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+  ];
+
   for (const lib of steamLibraryPaths) {
     const compat = path.join(lib, 'steamapps', 'compatdata', STEAM_GW2_APP_ID);
     if (!filesystem.existsSync(compat)) continue;
-    const proton = findProtonInLibrary(lib, filesystem);
+    const proton = findProtonInLibrary(compat, lib, compatToolsRoots, filesystem);
     if (!proton) continue;
     return {
       compatDataPath: compat,
@@ -126,13 +131,31 @@ export function resolveProtonContext(
   return null;
 }
 
-function findProtonInLibrary(libraryPath: string, filesystem: Filesystem): string | null {
+function findProtonInLibrary(
+  compatDataPath: string,
+  libraryPath: string,
+  compatToolsRoots: string[],
+  filesystem: Filesystem,
+): string | null {
+  // Strategy 1: read config_info to find the Proton tool actually used for this app
+  const configInfoPath = path.join(compatDataPath, 'config_info');
+  if (filesystem.existsSync(configInfoPath)) {
+    const content = filesystem.readFileSync(configInfoPath, 'utf-8');
+    for (const rawLine of content.split('\n').map((s) => s.trim()).filter(Boolean)) {
+      // Some installs store an absolute path ending with the Proton dir name (no /proton suffix).
+      // Try "<line>/proton" and "<line>" itself (if it already ends with /proton).
+      const candidate = rawLine.endsWith('/proton') ? rawLine : path.join(rawLine, 'proton');
+      if (filesystem.existsSync(candidate)) return candidate;
+    }
+  }
+
+  // Strategy 2: scan steamapps/common for Proton-* installs
   const commonDir = path.join(libraryPath, 'steamapps', 'common');
   let entries: string[];
   try {
     entries = filesystem.readdirSync(commonDir);
   } catch {
-    return null;
+    entries = [];
   }
   const protonDirs = entries
     .filter((name) => /^Proton(\s|-)/i.test(name))
@@ -142,5 +165,19 @@ function findProtonInLibrary(libraryPath: string, filesystem: Filesystem): strin
     const candidate = path.join(commonDir, dir, 'proton');
     if (filesystem.existsSync(candidate)) return candidate;
   }
+
+  // Strategy 3: scan compatibilitytools.d for Proton-GE and other custom installs
+  for (const root of compatToolsRoots) {
+    try {
+      const dirs = filesystem.readdirSync(root);
+      for (const dir of dirs.sort().reverse()) {
+        const candidate = path.join(root, dir, 'proton');
+        if (filesystem.existsSync(candidate)) return candidate;
+      }
+    } catch {
+      // directory missing — skip
+    }
+  }
+
   return null;
 }

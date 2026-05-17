@@ -345,6 +345,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                 checked={allowMultiInstance}
                                 onChange={(e) => {
                                     if (e.target.checked && !allowMultiInstance) {
+                                        setAllowMultiInstance(true);            // optimistic
                                         setShowMultiInstanceConfirm(true);
                                     } else {
                                         setAllowMultiInstance(false);
@@ -394,13 +395,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         <button
                             type="button"
                             className="btn-surface px-3 py-1.5 text-xs"
-                            onClick={() => setShowMultiInstanceConfirm(false)}
+                            onClick={() => {
+                                setAllowMultiInstance(false);            // revert optimistic
+                                setShowMultiInstanceConfirm(false);
+                            }}
                         >
                             Cancel
                         </button>
                         <button
                             type="button"
-                            className="btn-surface px-3 py-1.5 text-xs"
+                            className="btn-primary px-3 py-1.5 text-xs"
                             onClick={() => {
                                 setAllowMultiInstance(true);
                                 setShowMultiInstanceConfirm(false);
