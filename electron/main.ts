@@ -100,6 +100,11 @@ const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
+// Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
+// processes), mumble-name matching fails. We bind a "new pid that appeared
+// during this account's launch window" to the account here so detection still
+// works. Cleared when the pid exits or the user stops the account.
+const manualAccountPidBindings = new Map<string, number>();
 
 function encryptForStorage(key: Buffer): string {
   if (safeStorage.isEncryptionAvailable()) {
@@ -565,14 +570,52 @@ function launchViaSteam(args: string[]): void {
   child.unref();
 }
 
-async function waitForAccountProcess(accountId: string, timeoutMs = 25000): Promise<boolean> {
+async function waitForAccountProcess(
+  accountId: string,
+  timeoutMs = 25000,
+  preLaunchGw2Pids?: Set<number>,
+): Promise<boolean> {
   const startedAt = Date.now();
   const pollIntervalMs = process.platform === 'win32' ? 1200 : 500;
+  let fallbackLogged = false;
+
   while (Date.now() - startedAt < timeoutMs) {
     const active = getActiveAccountProcesses();
     if (active.some((processInfo) => processInfo.accountId === accountId)) {
       return true;
     }
+
+    // Windows fallback: if the mumble match never lands (likely because GW2
+    // ran elevated and WMI hid its CommandLine), bind any *new* Gw2-64.exe
+    // pid that appeared after we spawned to this account.
+    if (process.platform === 'win32' && preLaunchGw2Pids) {
+      const currentPids = new Set(getAllRunningGw2Pids());
+      const claimedPids = new Set<number>([
+        ...active.map((processInfo) => processInfo.pid),
+        ...Array.from(manualAccountPidBindings.values()),
+      ]);
+      const newCandidates = Array.from(currentPids).filter(
+        (pid) => !preLaunchGw2Pids.has(pid) && !claimedPids.has(pid),
+      );
+      if (newCandidates.length === 1) {
+        const pidToBind = newCandidates[0];
+        manualAccountPidBindings.set(accountId, pidToBind);
+        logMain(
+          'launch',
+          `[detect] Mumble-match missed for account=${accountId}; binding new Gw2-64.exe pid=${pidToBind} ` +
+          `(likely WMI elevated-process blackout). active=${active.length} currentGw2=${currentPids.size} preLaunch=${preLaunchGw2Pids.size}`,
+        );
+        return true;
+      }
+      if (!fallbackLogged && newCandidates.length > 1) {
+        logMainWarn(
+          'launch',
+          `[detect] Found ${newCandidates.length} new Gw2-64.exe pids during detection of account=${accountId}; skipping ambiguous binding`,
+        );
+        fallbackLogged = true;
+      }
+    }
+
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
   return false;
@@ -744,11 +787,13 @@ function getActiveAccountProcesses(): Array<{ accountId: string; pid: number; mu
   if (process.platform === 'win32') {
     const processes = getWindowsProcessSnapshot();
 
+    const livePids = new Set<number>();
     for (const processInfo of processes) {
       const imageName = String(processInfo?.Name || '').toLowerCase();
       if (!imageName || !names.includes(imageName)) continue;
       const pid = Number(processInfo?.ProcessId);
       if (!Number.isInteger(pid) || pid <= 0) continue;
+      livePids.add(pid);
       const commandLine = String(processInfo?.CommandLine || '');
       const mumbleName = extractMumbleNameFromCommandLine(commandLine);
       if (!mumbleName) continue;
@@ -756,6 +801,22 @@ function getActiveAccountProcesses(): Array<{ accountId: string; pid: number; mu
       if (!accountId) continue;
       if (!foundByAccount.has(accountId)) {
         foundByAccount.set(accountId, { accountId, pid, mumbleName });
+      }
+    }
+
+    // Fallback: include manually-bound pids for accounts whose mumble match
+    // failed (e.g. elevated processes whose CommandLine is hidden from WMI).
+    for (const [accountId, pid] of Array.from(manualAccountPidBindings.entries())) {
+      if (!livePids.has(pid)) {
+        manualAccountPidBindings.delete(accountId);
+        continue;
+      }
+      if (!foundByAccount.has(accountId)) {
+        foundByAccount.set(accountId, {
+          accountId,
+          pid,
+          mumbleName: getAccountMumbleName(accountId),
+        });
       }
     }
     return Array.from(foundByAccount.values());
@@ -885,6 +946,7 @@ function stopRunningGw2Processes(): boolean {
 }
 
 function stopAccountProcess(accountId: string): boolean {
+  manualAccountPidBindings.delete(accountId);
   launchStateMachine.setState(accountId, 'stopping', 'verified', 'Stop requested');
   const mappedPids = getActiveAccountProcesses()
     .filter((processInfo) => processInfo.accountId === accountId)
@@ -1426,6 +1488,7 @@ ipcMain.handle('launch-account', async (_, id) => {
   }
   if (!masterKey) throw new Error('Master key not set');
 
+  manualAccountPidBindings.delete(id);
   launchStateMachine.setState(id, 'launch_requested', 'verified', 'Launch requested');
 
   // @ts-ignore
@@ -1473,6 +1536,16 @@ ipcMain.handle('launch-account', async (_, id) => {
     ...(hasAuth ? ['-autologin'] : []),
     ...sanitizedExtraArgs,
   ];
+
+  // Snapshot existing GW2 pids before launch so we can attribute any new
+  // pid to this account when WMI hides the elevated process's command line.
+  const preLaunchGw2Pids = process.platform === 'win32'
+    ? new Set(getAllRunningGw2Pids())
+    : undefined;
+  if (preLaunchGw2Pids) {
+    logMain('launch', `[detect] preLaunch snapshot for account=${id}: ${preLaunchGw2Pids.size} existing Gw2 pids`);
+  }
+
   try {
     // On Linux, always launch via Steam so Proton handles the Windows executable
     // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
@@ -1511,11 +1584,17 @@ ipcMain.handle('launch-account', async (_, id) => {
     : process.platform === 'linux'
       ? LINUX_PROCESS_WAIT_TIMEOUT_MS
       : 25000;
-  const launched = await waitForAccountProcess(account.id, processWaitTimeoutMs);
+  const launched = await waitForAccountProcess(account.id, processWaitTimeoutMs, preLaunchGw2Pids);
   if (!launched) {
-    console.error(`GW2 did not appear as running for account ${account.nickname} within timeout.`);
+    logMainError(
+      'launch',
+      `Process not detected for account=${id} (${account.nickname}) within ${processWaitTimeoutMs}ms ` +
+      `— GW2 may still be running but the launcher couldn't see it. ` +
+      `Check %APPDATA%\\AxiAM\\logs\\main.log for WMI snapshot warnings.`,
+    );
     launchStateMachine.setState(id, 'errored', 'inferred', 'Process not detected before timeout');
   } else {
+    logMain('launch', `Account=${id} process detected and bound`);
     launchStateMachine.setState(id, 'process_detected', 'verified', 'Account process detected');
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
   }
