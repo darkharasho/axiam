@@ -8,17 +8,28 @@ const STEAM_APP_ID = '1284210';
  * Parse Steam's libraryfolders.vdf to get all Steam library paths.
  */
 export function getSteamLibraryPaths(): string[] {
-  const home = app.getPath('home');
-  const vdfPath = path.join(home, '.local', 'share', 'Steam', 'steamapps', 'libraryfolders.vdf');
-  if (!fs.existsSync(vdfPath)) return [];
+  const candidates: string[] = [];
+  if (process.platform === 'win32') {
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    candidates.push(
+      path.join(programFilesX86, 'Steam', 'steamapps', 'libraryfolders.vdf'),
+      path.join(programFiles, 'Steam', 'steamapps', 'libraryfolders.vdf'),
+    );
+  } else {
+    const home = app.getPath('home');
+    candidates.push(path.join(home, '.local', 'share', 'Steam', 'steamapps', 'libraryfolders.vdf'));
+  }
+
+  const vdfPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!vdfPath) return [];
 
   const content = fs.readFileSync(vdfPath, 'utf-8');
   const paths: string[] = [];
-  // Match "path" entries in the VDF file
   const pathRegex = /"path"\s+"([^"]+)"/g;
   let match;
   while ((match = pathRegex.exec(content)) !== null) {
-    paths.push(match[1]);
+    paths.push(match[1].replace(/\\\\/g, '\\'));
   }
   return paths;
 }

@@ -621,6 +621,9 @@ function autoLocateGw2ExecutablePath(): { found: boolean; path?: string; message
       path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Guild Wars 2', 'Gw2-64.exe'),
       path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Guild Wars 2', 'Gw2-64.exe'),
       'C:\\Guild Wars 2\\Gw2-64.exe',
+      ...getSteamLibraryPaths().map((libPath) =>
+        path.join(libPath, 'steamapps', 'common', 'Guild Wars 2', 'Gw2-64.exe')
+      ),
     ];
     const found = getFirstExistingPath(candidates);
     if (found) return { found: true, path: found, message: 'Found Guild Wars 2 executable.' };
@@ -1434,13 +1437,23 @@ ipcMain.handle('launch-account', async (_, id) => {
   }
 
   const launchSettings = (store.get('settings') as { gw2Path?: string } | undefined) || {};
-  const gw2Path = launchSettings?.gw2Path?.trim();
+  let gw2Path = launchSettings?.gw2Path?.trim();
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
     console.error(`GW2 path does not exist: ${gw2Path}`);
     logMainError('launch', `GW2 path does not exist for account=${id}: ${gw2Path}`);
     launchStateMachine.setState(id, 'errored', 'verified', 'GW2 path missing');
     return false;
+  }
+
+  // On Windows, prefer direct-executable launch so -shareArchive works across
+  // multiple instances (Steam single-instances the game, blocking concurrent launches).
+  if (!gw2Path && process.platform === 'win32') {
+    const located = autoLocateGw2ExecutablePath();
+    if (located.found && located.path) {
+      gw2Path = located.path;
+      logMain('launch', `[auto-locate] Using ${gw2Path} for direct launch`);
+    }
   }
 
   const extraArgs = splitLaunchArguments(account.launchArguments);
