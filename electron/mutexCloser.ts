@@ -128,7 +128,12 @@ export function resolveProtonContext(
 
 function findProtonInLibrary(libraryPath: string, filesystem: Filesystem): string | null {
   const commonDir = path.join(libraryPath, 'steamapps', 'common');
-  const entries = filesystem.readdirSync(commonDir);
+  let entries: string[];
+  try {
+    entries = filesystem.readdirSync(commonDir);
+  } catch {
+    return null;
+  }
   const protonDirs = entries
     .filter((name) => /^Proton(\s|-)/i.test(name))
     .sort()
