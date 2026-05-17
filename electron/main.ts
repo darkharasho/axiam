@@ -13,6 +13,13 @@ import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat, getSteamLibraryPaths } from './localDat.js';
+import {
+  getHelperPath,
+  runMutexCloserDirect,
+  runMutexCloserUnderProton,
+  resolveProtonContext,
+  type MutexCloserResult,
+} from './mutexCloser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -568,6 +575,35 @@ function launchViaSteam(args: string[]): void {
     stdio: 'ignore',
   });
   child.unref();
+}
+
+function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
+  const helperPath = getHelperPath();
+  if (!fs.existsSync(helperPath)) {
+    return { ok: false, closedCount: 0, reason: `helper binary not found at ${helperPath}` };
+  }
+  if (process.platform === 'win32') {
+    logMain('launch', `[mutex] Running mutex-closer against ${existingPidCount} existing GW2 process(es)`);
+    return runMutexCloserDirect(helperPath);
+  }
+  if (process.platform === 'linux') {
+    const home = os.homedir();
+    const libraryPaths = getSteamLibraryPaths();
+    // Ensure default library is checked even if libraryfolders.vdf missed it.
+    const defaultLib = path.join(home, '.local', 'share', 'Steam');
+    const allLibs = libraryPaths.includes(defaultLib) ? libraryPaths : [defaultLib, ...libraryPaths];
+    const ctx = resolveProtonContext(home, allLibs, {
+      existsSync: fs.existsSync,
+      readFileSync: (p, enc) => fs.readFileSync(p, enc ?? 'utf-8') as string,
+      readdirSync: (p) => fs.readdirSync(p) as string[],
+    });
+    if (!ctx) {
+      return { ok: false, closedCount: 0, reason: 'could not resolve a Steam Proton install for Guild Wars 2' };
+    }
+    logMain('launch', `[mutex] Running mutex-closer under Proton (${ctx.protonPath})`);
+    return runMutexCloserUnderProton(helperPath, ctx);
+  }
+  return { ok: false, closedCount: 0, reason: `mutex closing not supported on platform ${process.platform}` };
 }
 
 async function waitForAccountProcess(
@@ -1517,6 +1553,34 @@ ipcMain.handle('launch-account', async (_, id) => {
       gw2Path = located.path;
       logMain('launch', `[auto-locate] Using ${gw2Path} for direct launch`);
     }
+  }
+
+  // Multi-instance gate + mutex preparation.
+  const existingGw2Pids = getAllRunningGw2Pids();
+  if (existingGw2Pids.length > 0) {
+    const settingsForGate = (store.get('settings') as { allowMultiInstance?: boolean } | undefined) || {};
+    if (!settingsForGate.allowMultiInstance) {
+      logMainWarn('launch', `[mutex] Blocking launch of account=${id}: another GW2 instance is running and allowMultiInstance is off`);
+      launchStateMachine.setState(
+        id,
+        'errored',
+        'verified',
+        'Another GW2 instance is running. Enable "Allow multiple GW2 instances" in Settings to launch alongside it.',
+      );
+      return false;
+    }
+    const mutexResult = closeAnyExistingGw2Mutex(existingGw2Pids.length);
+    if (!mutexResult.ok) {
+      logMainError('launch', `[mutex] ${mutexResult.reason}`);
+      launchStateMachine.setState(
+        id,
+        'errored',
+        'verified',
+        `Couldn't prepare GW2 for multi-instance launch: ${mutexResult.reason}`,
+      );
+      return false;
+    }
+    logMain('launch', `[mutex] Closed AN-Mutex on ${mutexResult.closedCount} existing GW2 process(es)`);
   }
 
   const extraArgs = splitLaunchArguments(account.launchArguments);
