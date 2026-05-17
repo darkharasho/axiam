@@ -30,3 +30,4 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+tools/mutex-closer/target/
