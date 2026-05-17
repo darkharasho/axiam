@@ -129,7 +129,7 @@ const isDevFakeUpdate = process.env.AXIAM_DEV_FAKE_UPDATE === '1';
 const isDevFakeWhatsNew = process.env.AXIAM_DEV_FAKE_WHATS_NEW === '1' || isDevFakeUpdate;
 const isDevShowcase = process.env.AXIAM_DEV_SHOWCASE === '1';
 let fakeUpdateTimer: NodeJS.Timeout | null = null;
-const showcaseActiveAccounts = new Set<string>(['showcase-a']);
+const showcaseActiveAccounts = new Set<string>();
 const showcaseAccounts = [
   {
     id: 'showcase-a',
@@ -536,6 +536,9 @@ function launchViaSteam(args: string[]): void {
       detached: true,
       stdio: 'ignore',
     });
+    child.on('error', (spawnError) => {
+      logMainError('launch', `Steam spawn failed: ${spawnError.message}`);
+    });
     child.unref();
     return;
   }
@@ -593,8 +596,8 @@ function getGw2CommandRegex(): RegExp {
     : '';
 
   return escapedConfiguredName
-    ? new RegExp(`(?:^|[\\/\\s])(?:gw2-64(?:\\.exe)?|gw2(?:\\.exe)?|${escapedConfiguredName})(?:\\s|$)`, 'i')
-    : /(?:^|[\/\s])(?:gw2-64(?:\.exe)?|gw2(?:\.exe)?)(?:\s|$)/i;
+    ? new RegExp(`(?:^|[\\\\/\\s])(?:gw2-64(?:\\.exe)?|gw2(?:\\.exe)?|${escapedConfiguredName})(?:\\s|$)`, 'i')
+    : /(?:^|[\\/\s])(?:gw2-64(?:\.exe)?|gw2(?:\.exe)?)(?:\s|$)/i;
 }
 
 function getFirstExistingPath(candidates: string[]): string | null {
@@ -1107,7 +1110,7 @@ ipcMain.handle('get-whats-new', async () => {
   if (isDevFakeWhatsNew) {
     return {
       version,
-      releaseNotes: `# Release Notes\n\nVersion v${version}\n\n## ðŸŒŸ Highlights\n- Fake update mode is active for local UI testing.\n\n## ðŸ› ï¸ Improvements\n- Added a simulated updater flow (checking, downloading, restart).\n\n## ðŸ§¯ Fixes\n- What\\'s New can now be previewed without publishing a GitHub release.\n\n## âš ï¸ Breaking Changes\n- None.`,
+      releaseNotes: `# Release Notes\n\nVersion v${version}\n\n## 🌟 Highlights\n- Fake update mode is active for local UI testing.\n\n## 🛠️ Improvements\n- Added a simulated updater flow (checking, downloading, restart).\n\n## 🧯 Fixes\n- What\'s New can now be previewed without publishing a GitHub release.\n\n## ⚠️ Breaking Changes\n- None.`,
     };
   }
   const tag = `v${version}`;
@@ -1420,16 +1423,6 @@ ipcMain.handle('launch-account', async (_, id) => {
   }
   if (!masterKey) throw new Error('Master key not set');
 
-  // Linux: prevent multiple instances
-  if (process.platform === 'linux') {
-    const runningPids = getAllRunningGw2Pids();
-    if (runningPids.length > 0) {
-      logMainWarn('launch', `Aborting launch for account=${id}: Linux instance already running (pids=${runningPids.join(',')})`);
-      launchStateMachine.setState(id, 'errored', 'verified', 'Another GW2 instance is already running');
-      return false;
-    }
-  }
-
   launchStateMachine.setState(id, 'launch_requested', 'verified', 'Launch requested');
 
   // @ts-ignore
@@ -1463,7 +1456,7 @@ ipcMain.handle('launch-account', async (_, id) => {
   }
 
   const args = [
-    '--mumble', mumbleName,
+    '-mumble', mumbleName,
     ...(hasAuth ? ['-autologin'] : []),
     ...sanitizedExtraArgs,
   ];
