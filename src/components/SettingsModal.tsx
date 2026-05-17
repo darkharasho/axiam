@@ -13,6 +13,7 @@ type SettingsPayload = {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
+    allowMultiInstance: boolean;
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 350;
@@ -26,6 +27,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
     const [themeId, setThemeId] = useState('blood_legion');
+    const [allowMultiInstance, setAllowMultiInstance] = useState<boolean>(false);
+    const [showMultiInstanceConfirm, setShowMultiInstanceConfirm] = useState<boolean>(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
     const [isHydrated, setIsHydrated] = useState(false);
     const saveTimerRef = useRef<number | null>(null);
@@ -55,6 +58,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         gw2Path,
         masterPasswordPrompt,
         themeId,
+        allowMultiInstance,
     });
 
     const commitSave = async (payload: SettingsPayload, snapshot: string): Promise<void> => {
@@ -97,10 +101,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 gw2Path: settings?.gw2Path || '',
                 masterPasswordPrompt: settings?.masterPasswordPrompt ?? 'every_time',
                 themeId: settings?.themeId || 'blood_legion',
+                allowMultiInstance: settings?.allowMultiInstance ?? false,
             };
             setGw2Path(normalized.gw2Path);
             setMasterPasswordPrompt(normalized.masterPasswordPrompt);
             setThemeId(normalized.themeId);
+            setAllowMultiInstance(normalized.allowMultiInstance);
             const snapshot = JSON.stringify(normalized);
             lastSavedSnapshotRef.current = snapshot;
             pendingSaveRef.current = null;
@@ -135,6 +141,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         gw2Path,
         masterPasswordPrompt,
         themeId,
+        allowMultiInstance,
     ]);
 
     const handleAutoLocateGw2Path = async () => {
@@ -181,6 +188,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     );
 
     return (
+        <>
         <div className="fixed left-0 right-0 bottom-0 top-9 z-50">
             <button
                 className={`absolute inset-0 ${closing ? 'modal-fade-out' : 'modal-fade-in'}`}
@@ -327,6 +335,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
+                    {/* Experimental */}
+                    <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
+                        <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={allowMultiInstance}
+                                onChange={(e) => {
+                                    if (e.target.checked && !allowMultiInstance) {
+                                        setShowMultiInstanceConfirm(true);
+                                    } else {
+                                        setAllowMultiInstance(false);
+                                    }
+                                }}
+                            />
+                            <div>
+                                <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
+                                <div className="text-xs text-[var(--theme-text-dim)] mt-1">
+                                    Lets AxiAM launch more than one Guild Wars 2 client at a time by closing the
+                                    game's single-instance lock. Multi-boxing is tolerated by ArenaNet but not
+                                    officially supported — use at your own risk.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>
                         <span className="text-[10px] text-[var(--theme-text-dim)] font-light">Auto-saves</span>
@@ -340,6 +375,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 </div>
             </div>
         </div>
+        {showMultiInstanceConfirm && (
+            <div
+                className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+                role="dialog"
+                aria-modal="true"
+            >
+                <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-lg max-w-sm w-full p-4">
+                    <h4 className="text-sm font-medium text-[var(--theme-text)] mb-2">
+                        Enable multi-instance launches?
+                    </h4>
+                    <p className="text-xs text-[var(--theme-text-dim)] mb-4">
+                        This closes a kernel object inside the running GW2 process so a
+                        second client can start. It's the same technique used by
+                        Gw2Launcher, but isn't endorsed by ArenaNet. Continue?
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            className="btn-surface px-3 py-1.5 text-xs"
+                            onClick={() => setShowMultiInstanceConfirm(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn-surface px-3 py-1.5 text-xs"
+                            onClick={() => {
+                                setAllowMultiInstance(true);
+                                setShowMultiInstanceConfirm(false);
+                            }}
+                        >
+                            Enable
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 

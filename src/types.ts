@@ -13,4 +13,5 @@ export interface AppSettings {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
+    allowMultiInstance?: boolean;
 }
