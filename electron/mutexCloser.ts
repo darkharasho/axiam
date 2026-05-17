@@ -98,3 +98,44 @@ export function runMutexCloserUnderProton(helperPath: string, ctx: ProtonContext
     error: result.error ?? null,
   });
 }
+
+export interface Filesystem {
+  existsSync: (path: string) => boolean;
+  readFileSync: (path: string, encoding?: BufferEncoding) => string;
+  readdirSync: (path: string) => string[];
+}
+
+const STEAM_GW2_APP_ID = '1284210';
+
+export function resolveProtonContext(
+  home: string,
+  steamLibraryPaths: string[],
+  filesystem: Filesystem,
+): ProtonContext | null {
+  for (const lib of steamLibraryPaths) {
+    const compat = path.join(lib, 'steamapps', 'compatdata', STEAM_GW2_APP_ID);
+    if (!filesystem.existsSync(compat)) continue;
+    const proton = findProtonInLibrary(lib, filesystem);
+    if (!proton) continue;
+    return {
+      compatDataPath: compat,
+      protonPath: proton,
+      clientInstallPath: path.join(home, '.local', 'share', 'Steam'),
+    };
+  }
+  return null;
+}
+
+function findProtonInLibrary(libraryPath: string, filesystem: Filesystem): string | null {
+  const commonDir = path.join(libraryPath, 'steamapps', 'common');
+  const entries = filesystem.readdirSync(commonDir);
+  const protonDirs = entries
+    .filter((name) => /^Proton(\s|-)/i.test(name))
+    .sort()
+    .reverse(); // newest by name comes first
+  for (const dir of protonDirs) {
+    const candidate = path.join(commonDir, dir, 'proton');
+    if (filesystem.existsSync(candidate)) return candidate;
+  }
+  return null;
+}

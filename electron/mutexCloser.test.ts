@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { interpretHelperResult, type SpawnResult } from './mutexCloser.js';
+import { resolveProtonContext, type Filesystem } from './mutexCloser.js';
 
 function result(status: number | null, stdout = '', stderr = ''): SpawnResult {
   return { status, stdout, stderr, error: null };
@@ -53,5 +54,58 @@ describe('interpretHelperResult', () => {
   it('defaults closedCount to 1 on exit 0 when JSON is missing or malformed', () => {
     const r = interpretHelperResult(result(0, 'not-json'));
     expect(r).toEqual({ ok: true, closedCount: 1 });
+  });
+});
+
+function fakeFs(files: Set<string>): Filesystem {
+  return {
+    existsSync: (p: string) => files.has(p),
+    readFileSync: () => '',
+    readdirSync: () => [],
+  };
+}
+
+describe('resolveProtonContext', () => {
+  it('returns null when no compatdata exists', () => {
+    const fs = fakeFs(new Set());
+    expect(resolveProtonContext('/home/u', ['/home/u/.local/share/Steam'], fs)).toBeNull();
+  });
+
+  it('finds compatdata and a Proton install in the same library', () => {
+    const home = '/home/u';
+    const lib = `${home}/.local/share/Steam`;
+    const files = new Set([
+      `${lib}/steamapps/compatdata/1284210`,
+      `${lib}/steamapps/common/Proton - Experimental/proton`,
+    ]);
+    const fs: Filesystem = {
+      existsSync: (p) => files.has(p),
+      readFileSync: () => '',
+      readdirSync: (dir) => dir.endsWith('steamapps/common') ? ['Proton - Experimental'] : [],
+    };
+    const ctx = resolveProtonContext(home, [lib], fs);
+    expect(ctx).not.toBeNull();
+    expect(ctx!.compatDataPath).toBe(`${lib}/steamapps/compatdata/1284210`);
+    expect(ctx!.protonPath).toBe(`${lib}/steamapps/common/Proton - Experimental/proton`);
+    expect(ctx!.clientInstallPath).toBe(`${home}/.local/share/Steam`);
+  });
+
+  it('picks the newest Proton-prefixed directory by name when multiple exist', () => {
+    const home = '/home/u';
+    const lib = `${home}/.local/share/Steam`;
+    const files = new Set([
+      `${lib}/steamapps/compatdata/1284210`,
+      `${lib}/steamapps/common/Proton 8.0/proton`,
+      `${lib}/steamapps/common/Proton 9.0/proton`,
+    ]);
+    const fs: Filesystem = {
+      existsSync: (p) => files.has(p),
+      readFileSync: () => '',
+      readdirSync: (dir) => dir.endsWith('steamapps/common')
+        ? ['Proton 8.0', 'Proton 9.0', 'NotProton']
+        : [],
+    };
+    const ctx = resolveProtonContext(home, [lib], fs);
+    expect(ctx!.protonPath).toBe(`${lib}/steamapps/common/Proton 9.0/proton`);
   });
 });
