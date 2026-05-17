@@ -75,6 +75,12 @@
       "RELEASE_NOTES.md",
       "THIRD_PARTY_NOTICES.md"
     ],
+    "extraResources": [
+      {
+        "from": "build/win/axiam-mutex-closer.exe",
+        "to": "mutex-closer/axiam-mutex-closer.exe"
+      }
+    ],
     "linux": {
       "target": "AppImage",
       "category": "Game",
