@@ -11,6 +11,7 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 // NtQuerySystemInformation and NtQueryObject aren't in windows-sys — declare manually.
 #[repr(C)]
 #[derive(Copy, Clone)]
+#[allow(dead_code)]
 struct SystemHandleTableEntryInfo {
     process_id: u32,
     object_type_number: u8,
@@ -84,7 +85,8 @@ pub fn enumerate_handles_for_pids(target_pids: &[u32]) -> Result<Vec<CandidateHa
     // On 64-bit, the ULONG is followed by 4 bytes of padding before the array.
     let count = unsafe { *(buf.as_ptr() as *const u32) } as usize;
     let entry_size = std::mem::size_of::<SystemHandleTableEntryInfo>();
-    let header_size = std::mem::size_of::<usize>(); // ULONG + padding on 64-bit
+    // 64-bit Windows only: ULONG count (4 bytes) + 4 bytes padding = 8 = size_of::<usize>().
+    let header_size = std::mem::size_of::<usize>();
     let mut out = Vec::with_capacity(target_pids.len() * 8);
     for i in 0..count {
         let offset = header_size + i * entry_size;
@@ -152,12 +154,12 @@ pub fn handle_name_matches(
 
 pub fn close_handle_in_source(target_process: HANDLE, raw_handle: u16) -> Result<(), String> {
     unsafe {
-        let mut ignored: HANDLE = std::ptr::null_mut();
+        let mut dup: HANDLE = std::ptr::null_mut();
         let ok = DuplicateHandle(
             target_process,
             raw_handle as usize as HANDLE,
-            std::ptr::null_mut(),
-            &mut ignored,
+            GetCurrentProcess(),
+            &mut dup,
             0,
             0,
             DUPLICATE_CLOSE_SOURCE,
@@ -168,6 +170,7 @@ pub fn close_handle_in_source(target_process: HANDLE, raw_handle: u16) -> Result
                 raw_handle
             ));
         }
+        CloseHandle(dup);
         Ok(())
     }
 }

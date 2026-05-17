@@ -44,7 +44,9 @@ fn run(parsed: args::Args) -> ! {
             .collect(),
     };
     if targets.is_empty() {
-        if parsed.json { println!("{{\"closed\":0,\"targets\":0}}"); }
+        if parsed.json {
+            println!("{{\"closed\":0,\"targets\":0}}");
+        }
         std::process::exit(3);
     }
 
@@ -85,5 +87,9 @@ fn run(parsed: args::Args) -> ! {
     if parsed.json {
         println!("{{\"closed\":{},\"targets\":{}}}", closed, targets.len());
     }
-    if closed > 0 { std::process::exit(0) } else { std::process::exit(2) }
+    if closed > 0 {
+        std::process::exit(0);
+    } else {
+        std::process::exit(2);
+    }
 }
