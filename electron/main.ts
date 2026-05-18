@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { saveLocalDat, hasLocalDat, deleteLocalDat, restoreLocalDat, getSteamLibraryPaths } from './localDat.js';
+import { getAccountAppDataDir, hasLocalDat, deleteLocalDat, getSteamLibraryPaths } from './localDat.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -1298,9 +1298,6 @@ ipcMain.handle('export-diagnostics', async () => {
   return exportDiagnosticsBundle();
 });
 
-ipcMain.handle('save-local-dat', async (_, accountId: string) => {
-  return saveLocalDat(accountId);
-});
 
 ipcMain.handle('has-local-dat', async (_, accountId: string) => {
   return hasLocalDat(accountId);
@@ -1597,14 +1594,14 @@ ipcMain.handle('launch-account', async (_, id) => {
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
 
-  // Swap Local.dat if available — enables -autologin (no UI automation needed)
-  const hasAuth = restoreLocalDat(account.id);
+  // Each account runs against its own AppData via the APPDATA env injected on
+  // spawn (see below). Autologin works whenever Local.dat exists in the account
+  // profile dir, even with other GW2 instances running concurrently.
+  const hasAuth = hasLocalDat(account.id);
   if (hasAuth) {
-    logMain('launch', `[local-dat] Restored Local.dat for account=${id}, using -autologin`);
-  } else if (hasLocalDat(account.id)) {
-    logMainWarn('launch', `[local-dat] Saved Local.dat exists for account=${id} but couldn't be installed (likely locked by another running GW2 instance); launching without -autologin`);
+    logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
-    logMain('launch', `[local-dat] No saved Local.dat for account=${id}, launching without -autologin`);
+    logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
   }
 
   const args = [
@@ -1629,11 +1626,14 @@ ipcMain.handle('launch-account', async (_, id) => {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
+      const accountAppDataDir = getAccountAppDataDir(account.id);
+      logMain('launch', `[profile] account=${id} APPDATA=${accountAppDataDir}`);
       const child = spawn(gw2Path, args, {
         cwd: gw2WorkingDirectory,
         detached: true,
         stdio: 'ignore',
         windowsHide: false,
+        env: { ...process.env, APPDATA: accountAppDataDir },
       });
       child.on('error', (spawnError) => {
         console.error(`Spawn error: ${spawnError.message}`);
