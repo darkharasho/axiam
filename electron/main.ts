@@ -107,10 +107,10 @@ const SAFE_STORAGE_PREFIX = 'safe:';
 const STEAM_GW2_APP_ID = '1284210';
 const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
-const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000; // used in Task 8
-const INSTALL_RETRY_TOTAL_MS = 3000; // used in Task 7
-const INSTALL_RETRY_INTERVAL_MS = 200; // used in Task 7
-const QUIT_WATCHER_POLL_INTERVAL_MS = 2000; // used in Task 11
+const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000;
+const INSTALL_RETRY_TOTAL_MS = 3000;
+const INSTALL_RETRY_INTERVAL_MS = 200;
+const QUIT_WATCHER_POLL_INTERVAL_MS = 2000;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1768,6 +1768,9 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `Account=${id} process detected and bound`);
     launchStateMachine.setState(id, 'process_detected', 'verified', 'Account process detected');
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
+    // Register the binding before the dwell so quitWatcher is watching as
+    // early as possible — a fast crash during the dwell still gets noticed
+    // when the next poll runs.
     const boundPid = manualAccountPidBindings.get(id)
       ?? getActiveAccountProcesses().find((p) => p.accountId === id)?.pid;
     if (typeof boundPid === 'number') {
