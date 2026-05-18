@@ -7,7 +7,6 @@ interface AddAccountModalProps {
     onClose: () => void;
     onSave: (account: Omit<Account, 'id'>) => void;
     onDelete: (id: string) => Promise<void>;
-    onResaveLogin?: (id: string) => void;
     onClearLogin?: (id: string) => void;
     hasLocalDat?: boolean;
     initialData?: Account;
@@ -15,7 +14,7 @@ interface AddAccountModalProps {
 
 const EXIT_MS = 300;
 
-const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSave, onDelete, onResaveLogin, onClearLogin, hasLocalDat, initialData }) => {
+const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSave, onDelete, onClearLogin, hasLocalDat, initialData }) => {
     const [nickname, setNickname] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -211,15 +210,6 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
                                 {hasLocalDat ? 'Login data saved' : 'No saved login \u2014 log in manually with "Remember" checked'}
                             </span>
                             <div className="flex gap-1.5 shrink-0">
-                                {hasLocalDat && onResaveLogin && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onResaveLogin(initialData.id)}
-                                        className="btn-surface px-3 py-1.5 text-xs"
-                                    >
-                                        Re-save
-                                    </button>
-                                )}
                                 {hasLocalDat && onClearLogin && (
                                     <button
                                         type="button"

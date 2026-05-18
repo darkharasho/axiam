@@ -29,7 +29,6 @@ interface Api {
         note?: string;
     }>>;
     hasLocalDat: (id: string) => Promise<boolean>;
-    saveLocalDat: (id: string) => Promise<{ success: boolean; message: string }>;
     deleteLocalDat: (id: string) => Promise<boolean>;
     resolveAccountProfile: (apiKey: string) => Promise<{ name: string; created: string }>;
     setAccountApiProfile: (id: string, profile: { name?: string; created?: string }) => Promise<boolean>;
