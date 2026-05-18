@@ -1556,6 +1556,11 @@ ipcMain.handle('delete-account', async (_, id) => {
   const newAccounts = accounts.filter((a: any) => a.id !== id);
   store.set('accounts', newAccounts);
   launchStateMachine.clearState(id);
+  try {
+    deleteLocalDat(id);
+  } catch (err: any) {
+    logMainWarn('delete-account', `Failed to clean up profile dir for account=${id}: ${err?.message ?? err}`);
+  }
   return true;
 });
 
