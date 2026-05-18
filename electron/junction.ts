@@ -70,7 +70,9 @@ export function repointJunction(
           `(call migrateGw2DirToJunction first)`,
         );
       }
-      filesystem.rmSync(junctionPath, { force: true, recursive: false });
+      // recursive: true is required to remove a directory on Windows, even
+      // an empty one (otherwise rmSync throws EISDIR).
+      filesystem.rmSync(junctionPath, { force: true, recursive: true });
     } else {
       filesystem.rmSync(junctionPath, { force: true });
     }
@@ -123,7 +125,7 @@ export function migrateGw2DirToJunction(args: {
       path.join(args.defaultProfileDir, entry),
     );
   }
-  fsx.rmSync(args.hostPath, { force: true, recursive: false });
+  fsx.rmSync(args.hostPath, { force: true, recursive: true });
   fsx.symlinkSync(args.defaultProfileDir, args.hostPath, 'junction');
   return { status: 'migrated', movedFiles: entries.length };
 }

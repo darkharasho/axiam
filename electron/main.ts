@@ -115,6 +115,7 @@ const STEAM_GW2_APP_ID = '1284210';
 const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
 const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000;
+const LAUNCH_DWELL_MULTI_INSTANCE_MS = 20000;
 const INSTALL_RETRY_TOTAL_MS = 3000;
 const INSTALL_RETRY_INTERVAL_MS = 200;
 const QUIT_WATCHER_POLL_INTERVAL_MS = 2000;
@@ -1751,6 +1752,15 @@ async function doLaunch(id: string): Promise<boolean> {
       return false;
     }
     logMain('launch', `[mutex] Closed AN-Mutex on ${mutexResult.closedCount} existing GW2 process(es)`);
+
+    // Give the already-running instance time to finish its patcher / update
+    // check before spawning ours. Without this wait the second instance hits
+    // "Download failed (5)" on the splash screen because both clients race
+    // ArenaNet's update endpoint.
+    if (process.platform === 'win32') {
+      logMain('launch', `[multi-instance] account=${id} waiting ${LAUNCH_DWELL_MULTI_INSTANCE_MS}ms for prior GW2 to settle before spawning`);
+      await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_MULTI_INSTANCE_MS));
+    }
   }
 
   const extraArgs = splitLaunchArguments(account.launchArguments);
@@ -1807,10 +1817,17 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
   }
 
+  // Always pass -shareArchive so concurrent instances can both open the
+  // shared game data archive (Gw2.dat) in the install directory. Safe for
+  // single-instance launches too. Skipped if the user already supplied it
+  // via their per-account launchArguments (sanitizedExtraArgs).
+  const userExtras = sanitizedExtraArgs;
+  const hasShareArchive = userExtras.some((a) => a.toLowerCase() === '-sharearchive');
   const args = [
     '-mumble', mumbleName,
     ...(useAutologin ? ['-autologin'] : []),
-    ...sanitizedExtraArgs,
+    ...(hasShareArchive ? [] : ['-shareArchive']),
+    ...userExtras,
   ];
 
   // Remember whether install populated the host with this account's data
@@ -1891,9 +1908,6 @@ async function doLaunch(id: string): Promise<boolean> {
     if (typeof boundPid === 'number') {
       quitWatcher.noteLaunch(id, boundPid);
     }
-    // The dwell exists so the next launch's install doesn't overwrite the host
-    // file before GW2 reads it. Under junction mode each spawn gets its own
-    // directory via re-pointed junction, so no race to wait out.
     if (process.platform === 'win32' && !useJunction) {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
       await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
