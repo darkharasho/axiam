@@ -35,6 +35,12 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+// Dev-only userData override so local iteration doesn't collide with a real
+// AxiAM install. Set AXIAM_DEV_DATA_DIR to an absolute path before `npm run dev`.
+if (process.env.AXIAM_DEV_DATA_DIR) {
+  app.setPath('userData', process.env.AXIAM_DEV_DATA_DIR);
+}
+
 // ─── Migration: clean up stale updater cache from pre-rename installs ────────
 // If left behind, electron-updater can pick up the old cache and try to
 // unlink a non-existent AppImage path, blocking future updates.
@@ -111,6 +117,22 @@ const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000;
 const INSTALL_RETRY_TOTAL_MS = 3000;
 const INSTALL_RETRY_INTERVAL_MS = 200;
 const QUIT_WATCHER_POLL_INTERVAL_MS = 2000;
+// Per-account launch context used by the quit handler to decide whether to
+// snapshot the host Local.dat back into the profile.
+//
+// `installed=true` means the host file was populated from this account's own
+// snapshot at launch — saving it back is always safe (worst case: re-save same
+// data). `installed=false` means no snapshot existed; the host could hold any
+// previous account's credentials. In that case we only snapshot if the user
+// stayed in GW2 long enough to plausibly have authenticated (the elapsed
+// threshold below), otherwise a quick Stop would clobber this account's
+// profile with the prior account's data.
+interface LaunchContext {
+  installed: boolean;
+  startedAtMs: number;
+}
+const launchContexts = new Map<string, LaunchContext>();
+const FRESH_LAUNCH_MIN_SAVE_MS = 15000;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1185,11 +1207,26 @@ app.on('ready', () => {
   // back into the account's profile dir to preserve per-account settings.
   quitWatcher.configure(() => getAllRunningGw2Pids(), QUIT_WATCHER_POLL_INTERVAL_MS);
   quitWatcher.on('quit', (accountId: string) => {
+    const ctx = launchContexts.get(accountId);
+    launchContexts.delete(accountId);
+
     const remaining = getAllRunningGw2Pids();
     if (remaining.length > 0) {
       logMain('snapshot', `[snapshot] account=${accountId} quit but ${remaining.length} other GW2 still running; skipping copy-back to avoid cross-contamination`);
       return;
     }
+
+    // Fresh account (no snapshot existed at launch, so no install ran). Host
+    // could hold any prior account's data; only save if the user stayed long
+    // enough to plausibly have authenticated.
+    if (ctx && !ctx.installed) {
+      const elapsedMs = Date.now() - ctx.startedAtMs;
+      if (elapsedMs < FRESH_LAUNCH_MIN_SAVE_MS) {
+        logMain('snapshot', `[snapshot] account=${accountId} skipped: fresh-account quit after ${elapsedMs}ms (<${FRESH_LAUNCH_MIN_SAVE_MS}ms threshold) — likely no authentication happened`);
+        return;
+      }
+    }
+
     const result = snapshotHostToAccount(accountId);
     if (result.ok) {
       logMain('snapshot', `[snapshot] account=${accountId} copied Local.dat host → profile`);
@@ -1708,6 +1745,16 @@ async function doLaunch(id: string): Promise<boolean> {
     ...sanitizedExtraArgs,
   ];
 
+  // Remember whether install populated the host with this account's data
+  // and when the launch started. The quit handler uses both to decide
+  // whether snapshotting host → profile is safe.
+  if (process.platform === 'win32') {
+    launchContexts.set(id, {
+      installed: useAutologin,
+      startedAtMs: Date.now(),
+    });
+  }
+
   // Snapshot existing GW2 pids before launch so we can attribute any new
   // pid to this account when WMI hides the elevated process's command line.
   const preLaunchGw2Pids = process.platform === 'win32'
@@ -1785,11 +1832,12 @@ async function doLaunch(id: string): Promise<boolean> {
 }
 
 ipcMain.handle('launch-account', async (_, id) => {
+  // Set the requested phase up front so the cancellation check below only
+  // catches Stop clicks that happened during the serializer wait. Otherwise a
+  // stale 'stopped' from an earlier session would block every future launch.
+  launchStateMachine.setState(id, 'launch_requested', 'verified', 'Launch requested (queued)');
   const release = await launchSerializer.acquire();
   try {
-    // Cancellation check: if a Stop click between this launch being queued and
-    // actually firing transitioned the state machine away from launch_requested,
-    // skip the launch entirely.
     const queuedState = launchStateMachine.getState(id);
     if (queuedState && (queuedState.phase === 'stopping' || queuedState.phase === 'stopped')) {
       logMain('launch', `[serializer] account=${id} skipped: launch was cancelled while queued (phase=${queuedState.phase})`);
