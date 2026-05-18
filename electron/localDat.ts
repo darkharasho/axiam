@@ -6,6 +6,7 @@ const STEAM_APP_ID = '1284210';
 
 /**
  * Parse Steam's libraryfolders.vdf to get all Steam library paths.
+ * Used by mutex-closer for Proton resolution and main.ts for auto-locate.
  */
 export function getSteamLibraryPaths(): string[] {
   const candidates: string[] = [];
@@ -35,21 +36,18 @@ export function getSteamLibraryPaths(): string[] {
 }
 
 /**
- * Returns the directory where GW2 stores Local.dat.
- * - Linux: Wine prefix inside Steam compatdata (checks all Steam library folders)
- * - Windows: %AppData%\Guild Wars 2
+ * Returns the live GW2 data directory the host OS resolves at runtime.
+ * Used only by the Linux Local.dat handling now (mutex-closer's Proton resolver
+ * doesn't depend on this).
  */
 export function getGw2DataDirectory(): string | null {
   if (process.platform === 'linux') {
     const libraryPaths = getSteamLibraryPaths();
-
-    // Also check the default location in case VDF parsing fails
     const home = app.getPath('home');
     const defaultPath = path.join(home, '.local', 'share', 'Steam');
     if (!libraryPaths.includes(defaultPath)) {
       libraryPaths.unshift(defaultPath);
     }
-
     for (const libPath of libraryPaths) {
       const candidate = path.join(
         libPath, 'steamapps', 'compatdata',
@@ -60,96 +58,135 @@ export function getGw2DataDirectory(): string | null {
     }
     return null;
   }
-
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA;
     if (!appData) return null;
     const candidate = path.join(appData, 'Guild Wars 2');
     return fs.existsSync(candidate) ? candidate : null;
   }
-
   return null;
 }
 
-/** Returns the path to the live Local.dat, or null if it doesn't exist. */
-export function getLocalDatPath(): string | null {
-  const dir = getGw2DataDirectory();
-  if (!dir) return null;
-  const filePath = path.join(dir, 'Local.dat');
-  return fs.existsSync(filePath) ? filePath : null;
+/**
+ * Returns the per-account AppData root we point GW2 at via the APPDATA env var.
+ * Creates the directory on demand. GW2 will write its own `Guild Wars 2/`
+ * subdirectory inside.
+ */
+export function getAccountAppDataDir(accountId: string): string {
+  const dir = path.join(app.getPath('userData'), 'profiles', accountId);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }
 
-/** Directory where per-account Local.dat copies are stored. */
-function getStorageDir(): string {
-  return path.join(app.getPath('userData'), 'local-dat');
+/**
+ * Path to where Local.dat will land once GW2 writes it for this account.
+ * Internal helper — exposed only so tests and migration code can reuse it.
+ */
+export function getAccountLocalDatPath(accountId: string): string {
+  return path.join(
+    app.getPath('userData'),
+    'profiles',
+    accountId,
+    'Guild Wars 2',
+    'Local.dat',
+  );
 }
 
-/** Returns the storage path for a given account's Local.dat copy. */
-function getAccountLocalDatPath(accountId: string): string {
-  return path.join(getStorageDir(), `${accountId}.dat`);
-}
-
-/** Check if a saved Local.dat exists for an account. */
+/**
+ * True iff this account has a Local.dat inside its profile directory.
+ * Drives the "Saved" badge in the UI.
+ */
 export function hasLocalDat(accountId: string): boolean {
   return fs.existsSync(getAccountLocalDatPath(accountId));
 }
 
 /**
- * Save the current GW2 Local.dat as this account's copy.
- * Returns { success, message }.
- */
-export function saveLocalDat(accountId: string): { success: boolean; message: string } {
-  const sourcePath = getLocalDatPath();
-  if (!sourcePath) {
-    return { success: false, message: 'Local.dat not found. Log into GW2 first, then try again.' };
-  }
-
-  const storageDir = getStorageDir();
-  if (!fs.existsSync(storageDir)) {
-    fs.mkdirSync(storageDir, { recursive: true });
-  }
-
-  const destPath = getAccountLocalDatPath(accountId);
-  fs.copyFileSync(sourcePath, destPath);
-  return { success: true, message: 'Login saved successfully.' };
-}
-
-/**
- * Restore an account's Local.dat into the GW2 data directory.
- * Returns true if the file was placed, false if no saved copy, no target dir,
- * or if the destination is currently locked by a running GW2 process.
- *
- * The lock case happens during multi-instance launches on Windows: account A
- * is already running and holds Local.dat exclusively, so we can't overwrite it
- * with account B's copy. The caller treats false as "no -autologin available"
- * and proceeds — the user will log in manually for that instance.
- */
-export function restoreLocalDat(accountId: string): boolean {
-  const destDir = getGw2DataDirectory();
-  if (!destDir) return false;
-
-  const sourcePath = getAccountLocalDatPath(accountId);
-  if (!fs.existsSync(sourcePath)) return false;
-
-  const destPath = path.join(destDir, 'Local.dat');
-  try {
-    fs.copyFileSync(sourcePath, destPath);
-    return true;
-  } catch (err: any) {
-    const code = err?.code ?? '';
-    if (code === 'EBUSY' || code === 'EACCES' || code === 'EPERM') {
-      return false;
-    }
-    throw err;
-  }
-}
-
-/**
- * Delete a saved Local.dat for an account.
+ * Remove this account's entire profile directory (`userData/profiles/<id>/`)
+ * along with everything GW2 wrote inside. Idempotent — no throw if missing.
  */
 export function deleteLocalDat(accountId: string): void {
-  const filePath = getAccountLocalDatPath(accountId);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  const dir = path.join(app.getPath('userData'), 'profiles', accountId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Filesystem facade for migration tests. Real callers pass node:fs directly.
+ */
+export interface MigrationFs {
+  existsSync: (p: string) => boolean;
+  mkdirSync: (p: string, opts: { recursive: boolean }) => void;
+  renameSync: (from: string, to: string) => void;
+  readdirSync: (p: string) => string[];
+  rmdirSync: (p: string) => void;
+}
+
+export interface MigrationResult {
+  migratedAccountIds: string[];
+  legacyDirRemoved: boolean;
+  orphanedFilesLeft: number;
+  errors: Array<{ accountId: string; reason: string }>;
+}
+
+/**
+ * Move legacy `userData/local-dat/<id>.dat` files into the per-account profile
+ * layout. Idempotent: re-running after a successful migration is a no-op.
+ *
+ * Layout transform (per account):
+ *   userData/local-dat/<id>.dat
+ *     →  userData/profiles/<id>/Guild Wars 2/Local.dat
+ */
+export function migrateLegacyLocalDat(
+  args: { userDataDir: string; accountIds: string[] },
+  filesystem: MigrationFs,
+): MigrationResult {
+  const result: MigrationResult = {
+    migratedAccountIds: [],
+    legacyDirRemoved: false,
+    orphanedFilesLeft: 0,
+    errors: [],
+  };
+
+  const legacyDir = path.join(args.userDataDir, 'local-dat');
+
+  for (const accountId of args.accountIds) {
+    const newPath = path.join(args.userDataDir, 'profiles', accountId, 'Guild Wars 2', 'Local.dat');
+    if (filesystem.existsSync(newPath)) continue; // already migrated; idempotent
+
+    const oldPath = path.join(legacyDir, `${accountId}.dat`);
+    if (!filesystem.existsSync(oldPath)) continue; // nothing to migrate for this account
+
+    try {
+      const newDir = path.dirname(newPath);
+      filesystem.mkdirSync(newDir, { recursive: true });
+      filesystem.renameSync(oldPath, newPath);
+      result.migratedAccountIds.push(accountId);
+    } catch (err: any) {
+      result.errors.push({ accountId, reason: err?.message ?? String(err) });
+    }
+  }
+
+  if (filesystem.existsSync(legacyDir)) {
+    let remaining: string[];
+    try {
+      remaining = filesystem.readdirSync(legacyDir);
+    } catch {
+      remaining = [];
+    }
+    if (remaining.length === 0) {
+      try {
+        filesystem.rmdirSync(legacyDir);
+        result.legacyDirRemoved = true;
+      } catch {
+        // leave the empty directory; harmless.
+      }
+    } else {
+      result.orphanedFilesLeft = remaining.length;
+    }
+  }
+
+  return result;
 }
