@@ -2,8 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 
-const STEAM_APP_ID = '1284210';
-
 /**
  * Parse Steam's libraryfolders.vdf to get all Steam library paths.
  * Used by mutex-closer for Proton resolution and main.ts for auto-locate.
@@ -33,38 +31,6 @@ export function getSteamLibraryPaths(): string[] {
     paths.push(match[1].replace(/\\\\/g, '\\'));
   }
   return paths;
-}
-
-/**
- * Returns the live GW2 data directory the host OS resolves at runtime.
- * Used only by the Linux Local.dat handling now (mutex-closer's Proton resolver
- * doesn't depend on this).
- */
-export function getGw2DataDirectory(): string | null {
-  if (process.platform === 'linux') {
-    const libraryPaths = getSteamLibraryPaths();
-    const home = app.getPath('home');
-    const defaultPath = path.join(home, '.local', 'share', 'Steam');
-    if (!libraryPaths.includes(defaultPath)) {
-      libraryPaths.unshift(defaultPath);
-    }
-    for (const libPath of libraryPaths) {
-      const candidate = path.join(
-        libPath, 'steamapps', 'compatdata',
-        STEAM_APP_ID, 'pfx', 'drive_c', 'users', 'steamuser',
-        'AppData', 'Roaming', 'Guild Wars 2',
-      );
-      if (fs.existsSync(candidate)) return candidate;
-    }
-    return null;
-  }
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA;
-    if (!appData) return null;
-    const candidate = path.join(appData, 'Guild Wars 2');
-    return fs.existsSync(candidate) ? candidate : null;
-  }
-  return null;
 }
 
 /**
