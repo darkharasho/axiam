@@ -1601,6 +1601,8 @@ ipcMain.handle('launch-account', async (_, id) => {
   const hasAuth = restoreLocalDat(account.id);
   if (hasAuth) {
     logMain('launch', `[local-dat] Restored Local.dat for account=${id}, using -autologin`);
+  } else if (hasLocalDat(account.id)) {
+    logMainWarn('launch', `[local-dat] Saved Local.dat exists for account=${id} but couldn't be installed (likely locked by another running GW2 instance); launching without -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved Local.dat for account=${id}, launching without -autologin`);
   }

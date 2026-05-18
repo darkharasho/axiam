@@ -116,7 +116,13 @@ export function saveLocalDat(accountId: string): { success: boolean; message: st
 
 /**
  * Restore an account's Local.dat into the GW2 data directory.
- * Returns true if the file was placed, false if no saved copy or no target dir.
+ * Returns true if the file was placed, false if no saved copy, no target dir,
+ * or if the destination is currently locked by a running GW2 process.
+ *
+ * The lock case happens during multi-instance launches on Windows: account A
+ * is already running and holds Local.dat exclusively, so we can't overwrite it
+ * with account B's copy. The caller treats false as "no -autologin available"
+ * and proceeds — the user will log in manually for that instance.
  */
 export function restoreLocalDat(accountId: string): boolean {
   const destDir = getGw2DataDirectory();
@@ -126,8 +132,16 @@ export function restoreLocalDat(accountId: string): boolean {
   if (!fs.existsSync(sourcePath)) return false;
 
   const destPath = path.join(destDir, 'Local.dat');
-  fs.copyFileSync(sourcePath, destPath);
-  return true;
+  try {
+    fs.copyFileSync(sourcePath, destPath);
+    return true;
+  } catch (err: any) {
+    const code = err?.code ?? '';
+    if (code === 'EBUSY' || code === 'EACCES' || code === 'EPERM') {
+      return false;
+    }
+    throw err;
+  }
 }
 
 /**
