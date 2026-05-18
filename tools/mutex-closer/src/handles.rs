@@ -144,7 +144,7 @@ pub fn handle_name_matches(
                 let chars =
                     std::slice::from_raw_parts(info.name.buffer, (info.name.length / 2) as usize);
                 let s = OsString::from_wide(chars).to_string_lossy().into_owned();
-                Ok(s.ends_with(expected_name))
+                Ok(s.contains(expected_name))
             }
         };
         CloseHandle(dup);
