@@ -292,20 +292,6 @@ function App() {
         }, 300);
     };
 
-    const handleSaveLogin = async (id: string) => {
-        try {
-            const result = await window.api.saveLocalDat(id);
-            if (result.success) {
-                setAccountHasLocalDat((prev) => ({ ...prev, [id]: true }));
-                showToast('Login saved for this account.');
-            } else {
-                showToast(result.message);
-            }
-        } catch {
-            showToast('Failed to save login.');
-        }
-    };
-
     const handleClearLogin = async (id: string) => {
         try {
             await window.api.deleteLocalDat(id);
@@ -413,18 +399,6 @@ function App() {
             window.clearInterval(timer);
         };
     }, [isUnlocked]);
-
-    // Auto-save Local.dat when an account stops running and has no saved copy
-    const prevStatusesRef = useRef<Record<string, string>>({});
-    useEffect(() => {
-        const prev = prevStatusesRef.current;
-        for (const [id, status] of Object.entries(accountStatuses)) {
-            if (status === 'idle' && prev[id] === 'running' && !accountHasLocalDat[id]) {
-                handleSaveLogin(id);
-            }
-        }
-        prevStatusesRef.current = { ...accountStatuses };
-    }, [accountStatuses]);
 
     useEffect(() => {
         if (!window.api) return;
@@ -1002,7 +976,6 @@ function App() {
                 }}
                 onSave={handleSaveAccount}
                 onDelete={handleDeleteAccount}
-                onResaveLogin={handleSaveLogin}
                 onClearLogin={handleClearLogin}
                 hasLocalDat={editingAccount ? (accountHasLocalDat[editingAccount.id] ?? false) : false}
                 initialData={editingAccount}

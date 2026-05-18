@@ -76,7 +76,6 @@ contextBridge.exposeInMainWorld('api', {
         return () => ipcRenderer.removeListener('window:maximized-change', listener);
     },
     resetApp: () => ipcRenderer.send('reset-app'),
-    saveLocalDat: (accountId: string) => ipcRenderer.invoke('save-local-dat', accountId),
     hasLocalDat: (accountId: string) => ipcRenderer.invoke('has-local-dat', accountId),
     deleteLocalDat: (accountId: string) => ipcRenderer.invoke('delete-local-dat', accountId),
 });
