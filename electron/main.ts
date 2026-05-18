@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { getAccountAppDataDir, hasLocalDat, deleteLocalDat, getSteamLibraryPaths } from './localDat.js';
+import { getAccountAppDataDir, hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -1139,6 +1139,41 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
+  // Migrate legacy per-account Local.dat snapshots into the per-profile layout
+  // introduced in v1.1.14. Idempotent — re-runs at every startup but only acts
+  // when there's actual legacy state to move.
+  try {
+    // @ts-ignore
+    const accountsForMigration = (store.get('accounts') as Array<{ id: string }> | undefined) || [];
+    const migrationResult = migrateLegacyLocalDat(
+      {
+        userDataDir: app.getPath('userData'),
+        accountIds: accountsForMigration.map((a) => a.id),
+      },
+      {
+        existsSync: fs.existsSync,
+        mkdirSync: (p, opts) => fs.mkdirSync(p, opts),
+        renameSync: (from, to) => fs.renameSync(from, to),
+        readdirSync: (p) => fs.readdirSync(p) as string[],
+        rmdirSync: (p) => fs.rmdirSync(p),
+      },
+    );
+    if (migrationResult.migratedAccountIds.length > 0) {
+      logMain('startup', `[migration:profiles] moved Local.dat for accounts=${migrationResult.migratedAccountIds.join(',')}`);
+    }
+    if (migrationResult.legacyDirRemoved) {
+      logMain('startup', `[migration:profiles] removed empty legacy local-dat directory`);
+    }
+    if (migrationResult.orphanedFilesLeft > 0) {
+      logMainWarn('startup', `[migration:profiles] legacy local-dat directory contained ${migrationResult.orphanedFilesLeft} orphaned files; left untouched`);
+    }
+    for (const err of migrationResult.errors) {
+      logMainError('startup', `[migration:profiles] account=${err.accountId} failed: ${err.reason}`);
+    }
+  } catch (err: any) {
+    logMainError('startup', `[migration:profiles] unexpected error: ${err?.message ?? err}`);
+  }
+
   console.log("User Data Path:", app.getPath('userData'));
   fs.writeFileSync(path.join(app.getPath('userData'), 'axiom-version'), app.getVersion(), 'utf8');
   if (process.platform === 'win32') {
