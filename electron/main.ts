@@ -12,8 +12,9 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount } from './localDat.js';
 import * as launchSerializer from './launchSerializer.js';
+import { quitWatcher } from './quitWatcher.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -110,7 +111,6 @@ const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000; // used in Task 8
 const INSTALL_RETRY_TOTAL_MS = 3000; // used in Task 7
 const INSTALL_RETRY_INTERVAL_MS = 200; // used in Task 7
 const QUIT_WATCHER_POLL_INTERVAL_MS = 2000; // used in Task 11
-void QUIT_WATCHER_POLL_INTERVAL_MS;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1180,6 +1180,25 @@ app.on('ready', () => {
     logMainError('startup', `[migration:profiles] unexpected error: ${err?.message ?? err}`);
   }
 
+  // Configure and start the quit watcher (Windows only). When a tracked GW2
+  // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
+  // back into the account's profile dir to preserve per-account settings.
+  quitWatcher.configure(() => getAllRunningGw2Pids(), QUIT_WATCHER_POLL_INTERVAL_MS);
+  quitWatcher.on('quit', (accountId: string) => {
+    const remaining = getAllRunningGw2Pids();
+    if (remaining.length > 0) {
+      logMain('snapshot', `[snapshot] account=${accountId} quit but ${remaining.length} other GW2 still running; skipping copy-back to avoid cross-contamination`);
+      return;
+    }
+    const result = snapshotHostToAccount(accountId);
+    if (result.ok) {
+      logMain('snapshot', `[snapshot] account=${accountId} copied Local.dat host → profile`);
+    } else {
+      logMainWarn('snapshot', `[snapshot] account=${accountId} skipped: ${result.reason}`);
+    }
+  });
+  quitWatcher.start();
+
   console.log("User Data Path:", app.getPath('userData'));
   fs.writeFileSync(path.join(app.getPath('userData'), 'axiom-version'), app.getVersion(), 'utf8');
   if (process.platform === 'win32') {
@@ -1206,6 +1225,10 @@ app.on('ready', () => {
       void checkForUpdates('startup');
     }, 3000);
   }
+});
+
+app.on('before-quit', () => {
+  quitWatcher.stop();
 });
 
 app.on('window-all-closed', () => {
@@ -1474,6 +1497,7 @@ ipcMain.handle('stop-account-process', async (_, accountId) => {
     showcaseActiveAccounts.delete(String(accountId));
     return true;
   }
+  quitWatcher.noteStop(accountId);
   return stopAccountProcess(accountId);
 });
 
@@ -1744,6 +1768,11 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `Account=${id} process detected and bound`);
     launchStateMachine.setState(id, 'process_detected', 'verified', 'Account process detected');
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
+    const boundPid = manualAccountPidBindings.get(id)
+      ?? getActiveAccountProcesses().find((p) => p.accountId === id)?.pid;
+    if (typeof boundPid === 'number') {
+      quitWatcher.noteLaunch(id, boundPid);
+    }
     if (process.platform === 'win32') {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
       await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
