@@ -110,7 +110,7 @@ const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000; // used in Task 8
 const INSTALL_RETRY_TOTAL_MS = 3000; // used in Task 7
 const INSTALL_RETRY_INTERVAL_MS = 200; // used in Task 7
 const QUIT_WATCHER_POLL_INTERVAL_MS = 2000; // used in Task 11
-void LAUNCH_DWELL_AFTER_DETECTED_MS, QUIT_WATCHER_POLL_INTERVAL_MS;
+void QUIT_WATCHER_POLL_INTERVAL_MS;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1744,6 +1744,10 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `Account=${id} process detected and bound`);
     launchStateMachine.setState(id, 'process_detected', 'verified', 'Account process detected');
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
+    if (process.platform === 'win32') {
+      logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
+      await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
+    }
   }
   return launched;
 }
