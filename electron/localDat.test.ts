@@ -1,4 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: (key: string) => {
+      if (key === 'userData') return '/test-userdata';
+      if (key === 'home') return '/test-home';
+      return '/tmp';
+    },
+  },
+}));
 import {
   migrateLegacyLocalDat,
   type MigrationFs,
