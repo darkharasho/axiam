@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost } from './localDat.js';
 import * as launchSerializer from './launchSerializer.js';
 import {
   getHelperPath,
@@ -110,7 +110,7 @@ const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000; // used in Task 8
 const INSTALL_RETRY_TOTAL_MS = 3000; // used in Task 7
 const INSTALL_RETRY_INTERVAL_MS = 200; // used in Task 7
 const QUIT_WATCHER_POLL_INTERVAL_MS = 2000; // used in Task 11
-void LAUNCH_DWELL_AFTER_DETECTED_MS, INSTALL_RETRY_TOTAL_MS, INSTALL_RETRY_INTERVAL_MS, QUIT_WATCHER_POLL_INTERVAL_MS;
+void LAUNCH_DWELL_AFTER_DETECTED_MS, QUIT_WATCHER_POLL_INTERVAL_MS;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1570,6 +1570,19 @@ ipcMain.handle('delete-account', async (_, id) => {
   return true;
 });
 
+async function installSnapshotToHostWithRetry(
+  accountId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const start = Date.now();
+  let lastResult = installSnapshotToHost(accountId);
+  while (!lastResult.ok && Date.now() - start < INSTALL_RETRY_TOTAL_MS) {
+    if (lastResult.reason === 'no-snapshot') return lastResult;
+    await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_INTERVAL_MS));
+    lastResult = installSnapshotToHost(accountId);
+  }
+  return lastResult;
+}
+
 async function doLaunch(id: string): Promise<boolean> {
   if (isDevShowcase) {
     showcaseActiveAccounts.clear();
@@ -1640,11 +1653,26 @@ async function doLaunch(id: string): Promise<boolean> {
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
 
-  // Each account runs against its own AppData via the APPDATA env injected on
-  // spawn (see below). Autologin works whenever Local.dat exists in the account
-  // profile dir, even with other GW2 instances running concurrently.
-  const hasAuth = hasLocalDat(account.id);
-  if (hasAuth) {
+  // Per-account autologin works by installing the account's saved Local.dat at
+  // the host path right before spawn (Windows only; Linux uses Steam/Proton and
+  // doesn't manipulate the host file). The install runs with retry-and-backoff
+  // because another running GW2 may briefly hold the file open.
+  let useAutologin = hasLocalDat(account.id);
+  if (useAutologin && process.platform === 'win32') {
+    const installResult = await installSnapshotToHostWithRetry(account.id);
+    if (installResult.ok) {
+      logMain('launch', `[install] account=${id} installed snapshot to host path`);
+    } else if (installResult.reason === 'no-snapshot') {
+      // Shouldn't happen — hasLocalDat returned true. Defensive log.
+      logMainWarn('launch', `[install] account=${id} unexpected no-snapshot after hasLocalDat=true`);
+      useAutologin = false;
+    } else {
+      logMainWarn('launch', `[install] account=${id} retry exhausted (${installResult.reason}); launching without -autologin`);
+      useAutologin = false;
+    }
+  } else if (useAutologin) {
+    // Linux/other platforms: -autologin still gated on hasLocalDat but no host
+    // install happens. The Linux launch goes through Steam/Proton.
     logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
@@ -1652,7 +1680,7 @@ async function doLaunch(id: string): Promise<boolean> {
 
   const args = [
     '-mumble', mumbleName,
-    ...(hasAuth ? ['-autologin'] : []),
+    ...(useAutologin ? ['-autologin'] : []),
     ...sanitizedExtraArgs,
   ];
 
