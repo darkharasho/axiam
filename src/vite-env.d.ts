@@ -16,6 +16,7 @@ interface Api {
     getAccounts: () => Promise<Account[]>;
     deleteAccount: (id: string) => Promise<boolean>;
     launchAccount: (id: string) => Promise<boolean>;
+    getLaunchError: (id: string) => Promise<string | null>;
     getActiveAccountProcesses: () => Promise<Array<{ accountId: string; pid: number; mumbleName: string }>>;
     stopAccountProcess: (id: string) => Promise<boolean>;
     isGw2Running: () => Promise<boolean>;

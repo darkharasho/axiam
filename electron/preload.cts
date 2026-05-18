@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
     getAccounts: () => ipcRenderer.invoke('get-accounts'),
     deleteAccount: (id: string) => ipcRenderer.invoke('delete-account', id),
     launchAccount: (id: string) => ipcRenderer.invoke('launch-account', id),
+    getLaunchError: (id: string) => ipcRenderer.invoke('get-launch-error', id),
     getActiveAccountProcesses: () => ipcRenderer.invoke('get-active-account-processes'),
     stopAccountProcess: (id: string) => ipcRenderer.invoke('stop-account-process', id),
     isGw2Running: () => ipcRenderer.invoke('is-gw2-running'),

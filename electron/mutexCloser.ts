@@ -107,15 +107,51 @@ export interface Filesystem {
 
 const STEAM_GW2_APP_ID = '1284210';
 
+export function findRunningProtonForGw2(runPs: () => string): string | null {
+  const lines = runPs().split('\n');
+  for (const line of lines) {
+    // Look for `<path>/proton waitforexitandrun <stuff>/Gw2-64.exe` or similar.
+    // The Proton path may contain spaces, so match greedily up to the LAST occurrence
+    // of "/proton " (with a trailing space).
+    if (!/Gw2-64\.exe(\s|$)/i.test(line)) continue;
+    const idx = line.lastIndexOf('/proton ');
+    if (idx === -1) continue;
+    const protonPath = line.substring(0, idx + '/proton'.length);
+    // Sanity: it should be a non-empty path. Reject obviously bogus matches.
+    if (!protonPath.endsWith('/proton')) continue;
+    if (protonPath.length < '/proton'.length + 2) continue;
+    return protonPath;
+  }
+  return null;
+}
+
 export function resolveProtonContext(
   home: string,
   steamLibraryPaths: string[],
   filesystem: Filesystem,
+  psRunner?: () => string,    // returns `ps -eo args=` output; optional for callers that don't need this path
 ): ProtonContext | null {
   const compatToolsRoots = [
     path.join(home, '.steam', 'root', 'compatibilitytools.d'),
     path.join(home, '.local', 'share', 'Steam', 'compatibilitytools.d'),
   ];
+
+  if (psRunner) {
+    const runningProton = findRunningProtonForGw2(psRunner);
+    if (runningProton && filesystem.existsSync(runningProton)) {
+      // Find a compatdata that exists in any of the known libraries.
+      for (const lib of steamLibraryPaths) {
+        const compat = path.join(lib, 'steamapps', 'compatdata', STEAM_GW2_APP_ID);
+        if (filesystem.existsSync(compat)) {
+          return {
+            compatDataPath: compat,
+            protonPath: runningProton,
+            clientInstallPath: path.join(home, '.local', 'share', 'Steam'),
+          };
+        }
+      }
+    }
+  }
 
   for (const lib of steamLibraryPaths) {
     const compat = path.join(lib, 'steamapps', 'compatdata', STEAM_GW2_APP_ID);

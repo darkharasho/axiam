@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { interpretHelperResult, type SpawnResult } from './mutexCloser.js';
-import { resolveProtonContext, type Filesystem } from './mutexCloser.js';
+import { resolveProtonContext, findRunningProtonForGw2, type Filesystem } from './mutexCloser.js';
 
 function result(status: number | null, stdout = '', stderr = ''): SpawnResult {
   return { status, stdout, stderr, error: null };
@@ -54,6 +54,18 @@ describe('interpretHelperResult', () => {
   it('defaults closedCount to 1 on exit 0 when JSON is missing or malformed', () => {
     const r = interpretHelperResult(result(0, 'not-json'));
     expect(r).toEqual({ ok: true, closedCount: 1 });
+  });
+});
+
+describe('findRunningProtonForGw2', () => {
+  it('returns null when ps has no GW2 process', () => {
+    const runPs = () => 'firefox\nnode\n';
+    expect(findRunningProtonForGw2(runPs)).toBeNull();
+  });
+
+  it('extracts the Proton path from a running waitforexitandrun line', () => {
+    const runPs = () => '/home/u/.local/share/Steam/compatibilitytools.d/Proton-GE Latest/proton waitforexitandrun /games/Guild Wars 2/Gw2-64.exe -arg1\n';
+    expect(findRunningProtonForGw2(runPs)).toBe('/home/u/.local/share/Steam/compatibilitytools.d/Proton-GE Latest/proton');
   });
 });
 

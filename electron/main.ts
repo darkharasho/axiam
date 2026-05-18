@@ -592,11 +592,22 @@ function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
     // Ensure default library is checked even if libraryfolders.vdf missed it.
     const defaultLib = path.join(home, '.local', 'share', 'Steam');
     const allLibs = libraryPaths.includes(defaultLib) ? libraryPaths : [defaultLib, ...libraryPaths];
-    const ctx = resolveProtonContext(home, allLibs, {
-      existsSync: fs.existsSync,
-      readFileSync: (p, enc) => fs.readFileSync(p, enc ?? 'utf-8') as string,
-      readdirSync: (p) => fs.readdirSync(p) as string[],
-    });
+    const ctx = resolveProtonContext(
+      home,
+      allLibs,
+      {
+        existsSync: fs.existsSync,
+        readFileSync: (p, enc) => fs.readFileSync(p, enc ?? 'utf-8') as string,
+        readdirSync: (p) => fs.readdirSync(p) as string[],
+      },
+      () => {
+        try {
+          return spawnSync('ps', ['-eo', 'args='], { encoding: 'utf8' }).stdout || '';
+        } catch {
+          return '';
+        }
+      },
+    );
     if (!ctx) {
       return { ok: false, closedCount: 0, reason: 'could not resolve a Steam Proton install for Guild Wars 2' };
     }
@@ -1662,6 +1673,13 @@ ipcMain.handle('launch-account', async (_, id) => {
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
   }
   return launched;
+});
+
+ipcMain.handle('get-launch-error', async (_, id) => {
+  const state = launchStateMachine.getState(id);
+  if (!state) return null;
+  if (state.phase !== 'errored') return null;
+  return state.note || null;
 });
 
 ipcMain.handle('save-settings', async (_, settings) => {
