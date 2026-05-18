@@ -54,7 +54,6 @@ export type IpcEvents = {
     'open-external': (url: string) => Promise<boolean>;
     'export-diagnostics': () => Promise<{ success: boolean; path?: string; message: string }>;
     'reset-app': () => void;
-    'save-local-dat': (accountId: string) => Promise<{ success: boolean; message: string }>;
     'has-local-dat': (accountId: string) => Promise<boolean>;
     'delete-local-dat': (accountId: string) => Promise<boolean>;
 }
