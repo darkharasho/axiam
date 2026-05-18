@@ -258,7 +258,11 @@ function App() {
             const launched = await withTimeout(window.api.launchAccount(id), 60_000, 'launchAccount');
             if (!launched) {
                 setAccountStatuses((previous) => ({ ...previous, [id]: 'errored' }));
-                showToast('GW2 did not report as launched. Check Steam and launcher state.');
+                let reason: string | null = null;
+                try {
+                    reason = await window.api.getLaunchError(id);
+                } catch { /* ignore */ }
+                showToast(reason || 'GW2 did not report as launched. Check Steam and launcher state.');
             } else {
                 setAccountStatuses((previous) => ({ ...previous, [id]: 'running' }));
             }

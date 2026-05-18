@@ -21,6 +21,7 @@ export interface AppSettings {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
+    allowMultiInstance?: boolean;
 }
 
 export type IpcEvents = {
@@ -29,6 +30,7 @@ export type IpcEvents = {
     'get-accounts': () => Promise<Account[]>;
     'delete-account': (id: string) => Promise<boolean>;
     'launch-account': (id: string) => Promise<boolean>;
+    'get-launch-error': (id: string) => Promise<string | null>;
     'get-active-account-processes': () => Promise<Array<{ accountId: string; pid: number; mumbleName: string }>>;
     'stop-account-process': (id: string) => Promise<boolean>;
     'is-gw2-running': () => Promise<boolean>;

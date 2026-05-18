@@ -12,6 +12,7 @@
     "dev:web": "vite",
     "build": "tsc && vite build",
     "build:linux": "npm run build:electron && vite build && electron-builder --linux",
+    "build:mutex-closer": "cd tools/mutex-closer && cargo build --release --target x86_64-pc-windows-gnu && cp target/x86_64-pc-windows-gnu/release/axiam-mutex-closer.exe ../../build/win/axiam-mutex-closer.exe",
     "build:win": "npm run build:electron && vite build && electron-builder --win",
     "build:all": "npm run build:electron && vite build && electron-builder --linux --win",
     "build:github": "node scripts/build-github.mjs",
@@ -20,7 +21,9 @@
     "preview": "vite preview",
     "electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "electron:build": "npm run build:electron && vite build && electron-builder"
+    "electron:build": "npm run build:electron && vite build && electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "electron-log": "^5.4.3",
@@ -51,6 +54,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
     "vite": "^5.1.4",
+    "vitest": "^1.6.1",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -73,6 +77,12 @@
       "README.md",
       "RELEASE_NOTES.md",
       "THIRD_PARTY_NOTICES.md"
+    ],
+    "extraResources": [
+      {
+        "from": "build/win/axiam-mutex-closer.exe",
+        "to": "mutex-closer/axiam-mutex-closer.exe"
+      }
     ],
     "linux": {
       "target": "AppImage",
