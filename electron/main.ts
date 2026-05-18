@@ -13,6 +13,7 @@ import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
+import * as launchSerializer from './launchSerializer.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -105,6 +106,11 @@ const SAFE_STORAGE_PREFIX = 'safe:';
 const STEAM_GW2_APP_ID = '1284210';
 const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
+const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000; // used in Task 8
+const INSTALL_RETRY_TOTAL_MS = 3000; // used in Task 7
+const INSTALL_RETRY_INTERVAL_MS = 200; // used in Task 7
+const QUIT_WATCHER_POLL_INTERVAL_MS = 2000; // used in Task 11
+void LAUNCH_DWELL_AFTER_DETECTED_MS, INSTALL_RETRY_TOTAL_MS, INSTALL_RETRY_INTERVAL_MS, QUIT_WATCHER_POLL_INTERVAL_MS;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1564,7 +1570,7 @@ ipcMain.handle('delete-account', async (_, id) => {
   return true;
 });
 
-ipcMain.handle('launch-account', async (_, id) => {
+async function doLaunch(id: string): Promise<boolean> {
   if (isDevShowcase) {
     showcaseActiveAccounts.clear();
     showcaseActiveAccounts.add(String(id));
@@ -1712,6 +1718,23 @@ ipcMain.handle('launch-account', async (_, id) => {
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
   }
   return launched;
+}
+
+ipcMain.handle('launch-account', async (_, id) => {
+  const release = await launchSerializer.acquire();
+  try {
+    // Cancellation check: if a Stop click between this launch being queued and
+    // actually firing transitioned the state machine away from launch_requested,
+    // skip the launch entirely.
+    const queuedState = launchStateMachine.getState(id);
+    if (queuedState && (queuedState.phase === 'stopping' || queuedState.phase === 'stopped')) {
+      logMain('launch', `[serializer] account=${id} skipped: launch was cancelled while queued (phase=${queuedState.phase})`);
+      return false;
+    }
+    return await doLaunch(id);
+  } finally {
+    release();
+  }
 });
 
 ipcMain.handle('get-launch-error', async (_, id) => {
