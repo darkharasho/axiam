@@ -285,7 +285,8 @@ describe('snapshotHostToAccount', () => {
 
   it('copies the host Local.dat into the per-account profile dir on success', () => {
     const spy = fakeCopyFs([]);
-    spy.fs.existsSync = (p) => p.startsWith('/host');
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
     const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
     expect(result).toEqual({ ok: true });
     expect(spy.copies.length).toBe(1);
@@ -295,7 +296,8 @@ describe('snapshotHostToAccount', () => {
 
   it('creates the per-account Guild Wars 2 directory when missing', () => {
     const spy = fakeCopyFs([]);
-    spy.fs.existsSync = (p) => p.startsWith('/host');
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
     const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
     expect(result.ok).toBe(true);
     expect(spy.mkdirs.some((dir) => dir.endsWith(path.join('profiles', 'acc-a', 'Guild Wars 2')))).toBe(true);
@@ -303,7 +305,8 @@ describe('snapshotHostToAccount', () => {
 
   it('returns the error code on copy failure', () => {
     const spy = fakeCopyFs([]);
-    spy.fs.existsSync = (p) => p.startsWith('/host');
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
     spy.failNextCopyWith = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }) as NodeJS.ErrnoException;
     const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
     expect(result.ok).toBe(false);

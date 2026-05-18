@@ -77,7 +77,9 @@ function fakeFs(files: Set<string>): Filesystem {
   };
 }
 
-describe('resolveProtonContext', () => {
+// Proton path resolution only runs on Linux; the tests below pin POSIX paths,
+// which `path.join` mangles on Windows. Skip the whole block off-Linux.
+describe.skipIf(process.platform === 'win32')('resolveProtonContext', () => {
   it('returns null when no compatdata exists', () => {
     const fs = fakeFs(new Set());
     expect(resolveProtonContext('/home/u', ['/home/u/.local/share/Steam'], fs)).toBeNull();
