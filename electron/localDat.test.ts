@@ -14,7 +14,7 @@ import {
   type MigrationFs,
   type MigrationResult,
 } from './localDat.js';
-import { installSnapshotToHost, snapshotHostToAccount, type CopyFs, type CopyResult } from './localDat.js';
+import { installSnapshotToHost, snapshotHostToAccount, type CopyFs } from './localDat.js';
 import * as path from 'path';
 
 type FsSpy = {
