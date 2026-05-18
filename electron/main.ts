@@ -13,6 +13,7 @@ import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount } from './localDat.js';
+import { migrateGw2DirToJunction, repointJunction } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
 import { quitWatcher } from './quitWatcher.js';
 import {
@@ -1202,6 +1203,39 @@ app.on('ready', () => {
     logMainError('startup', `[migration:profiles] unexpected error: ${err?.message ?? err}`);
   }
 
+  // Junction migration (Windows + opt-in flag). Idempotent: subsequent runs
+  // detect the existing junction and no-op. Refuses to migrate while GW2 is
+  // running so we don't yank a directory out from under live file handles.
+  if (process.platform === 'win32') {
+    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
+    if (settings.junctionMultiInstance) {
+      const appData = process.env.APPDATA;
+      if (!appData) {
+        logMainWarn('startup', '[junction] APPDATA env var missing; cannot migrate');
+      } else {
+        const hostPath = path.join(appData, 'Guild Wars 2');
+        const defaultProfileDir = path.join(
+          app.getPath('userData'),
+          'default-gw2-state',
+          'Guild Wars 2',
+        );
+        try {
+          const result = migrateGw2DirToJunction({
+            hostPath,
+            defaultProfileDir,
+            isGw2Running: () => getAllRunningGw2Pids().length > 0,
+          });
+          logMain('startup', `[junction] migration: ${result.status} (${result.movedFiles} files)`);
+          if (result.status === 'refused-gw2-running' && mainWindow) {
+            mainWindow.webContents.send('junction-migration-deferred');
+          }
+        } catch (err: any) {
+          logMainError('startup', `[junction] migration failed: ${err?.message ?? err}`);
+        }
+      }
+    }
+  }
+
   // Configure and start the quit watcher (Windows only). When a tracked GW2
   // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
   // back into the account's profile dir to preserve per-account settings.
@@ -1209,6 +1243,14 @@ app.on('ready', () => {
   quitWatcher.on('quit', (accountId: string) => {
     const ctx = launchContexts.get(accountId);
     launchContexts.delete(accountId);
+
+    // Junction mode: GW2 wrote in place into the account's profile dir via
+    // the repointed junction, so there's nothing to snapshot back.
+    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
+    if (settings.junctionMultiInstance) {
+      logMain('snapshot', `[junction] account=${accountId} quit; state already persisted in-place`);
+      return;
+    }
 
     const remaining = getAllRunningGw2Pids();
     if (remaining.length > 0) {
@@ -1663,8 +1705,9 @@ async function doLaunch(id: string): Promise<boolean> {
     return false;
   }
 
-  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean } | undefined) || {};
+  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
+  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true;
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
     console.error(`GW2 path does not exist: ${gw2Path}`);
@@ -1714,12 +1757,37 @@ async function doLaunch(id: string): Promise<boolean> {
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
 
-  // Per-account autologin works by installing the account's saved Local.dat at
-  // the host path right before spawn (Windows only; Linux uses Steam/Proton and
-  // doesn't manipulate the host file). The install runs with retry-and-backoff
-  // because another running GW2 may briefly hold the file open.
+  // Per-account autologin: install the account's Local.dat at the host path
+  // (or re-point the junction at the account's profile dir under junction
+  // mode) before spawn so GW2 reads this account's saved credentials.
   let useAutologin = hasLocalDat(account.id);
-  if (useAutologin && process.platform === 'win32') {
+  if (useJunction) {
+    const appData = process.env.APPDATA;
+    const hostPath = appData ? path.join(appData, 'Guild Wars 2') : null;
+    const profileDir = path.join(
+      app.getPath('userData'),
+      'profiles',
+      account.id,
+      'Guild Wars 2',
+    );
+    if (!hostPath) {
+      logMainWarn('launch', `[junction] account=${id} APPDATA missing; launching without -autologin`);
+      useAutologin = false;
+    } else {
+      if (!fs.existsSync(profileDir)) {
+        // Fresh account: create the profile dir so the junction has somewhere
+        // to point. GW2 will create Local.dat on first save.
+        fs.mkdirSync(profileDir, { recursive: true });
+      }
+      try {
+        repointJunction(hostPath, profileDir);
+        logMain('launch', `[junction] account=${id} repointed → ${profileDir}`);
+      } catch (err: any) {
+        logMainError('launch', `[junction] account=${id} repoint failed: ${err?.message ?? err}; launching without -autologin`);
+        useAutologin = false;
+      }
+    }
+  } else if (useAutologin && process.platform === 'win32') {
     const installResult = await installSnapshotToHostWithRetry(account.id);
     if (installResult.ok) {
       logMain('launch', `[install] account=${id} installed snapshot to host path`);
@@ -1823,7 +1891,10 @@ async function doLaunch(id: string): Promise<boolean> {
     if (typeof boundPid === 'number') {
       quitWatcher.noteLaunch(id, boundPid);
     }
-    if (process.platform === 'win32') {
+    // The dwell exists so the next launch's install doesn't overwrite the host
+    // file before GW2 reads it. Under junction mode each spawn gets its own
+    // directory via re-pointed junction, so no race to wait out.
+    if (process.platform === 'win32' && !useJunction) {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
       await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
     }
