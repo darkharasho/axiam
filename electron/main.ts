@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { getAccountAppDataDir, hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -1666,14 +1666,11 @@ ipcMain.handle('launch-account', async (_, id) => {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
-      const accountAppDataDir = getAccountAppDataDir(account.id);
-      logMain('launch', `[profile] account=${id} APPDATA=${accountAppDataDir}`);
       const child = spawn(gw2Path, args, {
         cwd: gw2WorkingDirectory,
         detached: true,
         stdio: 'ignore',
         windowsHide: false,
-        env: { ...process.env, APPDATA: accountAppDataDir },
       });
       child.on('error', (spawnError) => {
         console.error(`Spawn error: ${spawnError.message}`);
