@@ -335,35 +335,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Experimental */}
-                    <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
-                        <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
-                        <label className="flex items-start gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="mt-1"
-                                checked={allowMultiInstance}
-                                onChange={(e) => {
-                                    if (e.target.checked && !allowMultiInstance) {
-                                        setAllowMultiInstance(true);            // optimistic
-                                        setShowMultiInstanceConfirm(true);
-                                    } else {
-                                        setAllowMultiInstance(false);
-                                    }
-                                }}
-                            />
-                            <div>
-                                <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
-                                <div className="text-xs text-[var(--theme-text-dim)] mt-1">
-                                    Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
-                                    own credentials. Multi-boxing is tolerated by ArenaNet but not officially
-                                    supported — use at your own risk. First launch of a new account will pre-fill
-                                    another account's email; log in once with the correct account and it'll save
-                                    per-account from then on.
+                    {/* Experimental — Windows only. The DLL-injection-based
+                       per-account-credentials strategy is implemented for
+                       Win32 Gw2-64.exe; Linux/Proton needs a different
+                       approach (Wine DLL overrides, WINE_OVERRIDES, or a
+                       Wine-aware shim) that we haven't tackled yet. */}
+                    {window.api.platform === 'win32' && (
+                        <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
+                            <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    checked={allowMultiInstance}
+                                    onChange={(e) => {
+                                        if (e.target.checked && !allowMultiInstance) {
+                                            setAllowMultiInstance(true);            // optimistic
+                                            setShowMultiInstanceConfirm(true);
+                                        } else {
+                                            setAllowMultiInstance(false);
+                                        }
+                                    }}
+                                />
+                                <div>
+                                    <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
+                                    <div className="text-xs text-[var(--theme-text-dim)] mt-1">
+                                        Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
+                                        own credentials. Multi-boxing is tolerated by ArenaNet but not officially
+                                        supported — use at your own risk. First launch of a new account will pre-fill
+                                        another account's email; log in once with the correct account and it'll save
+                                        per-account from then on.
+                                    </div>
                                 </div>
-                            </div>
-                        </label>
-                    </div>
+                            </label>
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>

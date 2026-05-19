@@ -4,6 +4,11 @@ import { Account, AppSettings } from './types.js';
 console.log('Preload script loaded!');
 
 contextBridge.exposeInMainWorld('api', {
+    // Static once-per-process metadata. Exposed as a plain value (not a
+    // function) so renderers don't need an async hop. 'win32' | 'linux'
+    // | 'darwin' | … per Node's process.platform.
+    platform: process.platform,
+
     hasMasterPassword: () => ipcRenderer.invoke('has-master-password'),
     shouldPromptMasterPassword: () => ipcRenderer.invoke('should-prompt-master-password'),
     setMasterPassword: (password: string) => ipcRenderer.invoke('set-master-password', password),

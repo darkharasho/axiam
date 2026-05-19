@@ -6,6 +6,9 @@ declare global {
 }
 
 interface Api {
+    /** Host OS, mirrors Node's process.platform. */
+    platform: NodeJS.Platform;
+
     hasMasterPassword: () => Promise<boolean>;
     shouldPromptMasterPassword: () => Promise<boolean>;
     setMasterPassword: (password: string) => Promise<boolean>;
