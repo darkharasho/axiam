@@ -12,7 +12,8 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath } from './localDat.js';
+import { injectDll } from './dllInjector.js';
 import { migrateGw2DirToJunction, repointJunction } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
 import { quitWatcher } from './quitWatcher.js';
@@ -1245,9 +1246,16 @@ app.on('ready', () => {
     const ctx = launchContexts.get(accountId);
     launchContexts.delete(accountId);
 
+    // DLL-redirect mode: GW2's every Local.dat open was rewritten to the
+    // per-account file in-process, so the host file never held this
+    // account's data. Nothing to copy back.
+    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
+    if (settings.dllRedirectMultiInstance) {
+      logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
+      return;
+    }
     // Junction mode: GW2 wrote in place into the account's profile dir via
     // the repointed junction, so there's nothing to snapshot back.
-    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     if (settings.junctionMultiInstance) {
       logMain('snapshot', `[junction] account=${accountId} quit; state already persisted in-place`);
       return;
@@ -1706,9 +1714,14 @@ async function doLaunch(id: string): Promise<boolean> {
     return false;
   }
 
-  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean } | undefined) || {};
+  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean; dllRedirectMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
-  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true;
+  // DLL redirect takes precedence when both flags are on: it's the
+  // current best multi-instance strategy, and running junction at the
+  // same time would point the host appdata at a per-account dir for no
+  // benefit.
+  const useDllRedirect = process.platform === 'win32' && launchSettings.dllRedirectMultiInstance === true;
+  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true && !useDllRedirect;
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
     console.error(`GW2 path does not exist: ${gw2Path}`);
@@ -1770,8 +1783,24 @@ async function doLaunch(id: string): Promise<boolean> {
   // Per-account autologin: install the account's Local.dat at the host path
   // (or re-point the junction at the account's profile dir under junction
   // mode) before spawn so GW2 reads this account's saved credentials.
+  //
+  // Under dllRedirectMultiInstance, no host-path manipulation is needed:
+  // the injected DLL rewrites every NtCreateFile of Local.dat to the
+  // per-account file directly. The profile dir still needs to exist (so
+  // the DLL has somewhere to write to on first save) but otherwise this
+  // whole block is a no-op for the redirect mode.
   let useAutologin = hasLocalDat(account.id);
-  if (useJunction) {
+  if (useDllRedirect) {
+    const profileDir = path.dirname(getAccountLocalDatPath(account.id));
+    if (!fs.existsSync(profileDir)) {
+      fs.mkdirSync(profileDir, { recursive: true });
+    }
+    if (useAutologin) {
+      logMain('launch', `[dll-redirect] account=${id} per-process Local.dat redirect armed; -autologin will read from profile`);
+    } else {
+      logMain('launch', `[dll-redirect] account=${id} per-process redirect armed; first login will create Local.dat in profile`);
+    }
+  } else if (useJunction) {
     const appData = process.env.APPDATA;
     const hostPath = appData ? path.join(appData, 'Guild Wars 2') : null;
     const profileDir = path.join(
@@ -1852,7 +1881,29 @@ async function doLaunch(id: string): Promise<boolean> {
   try {
     // On Linux, always launch via Steam so Proton handles the Windows executable
     // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
-    if (gw2Path && process.platform !== 'linux') {
+    if (gw2Path && process.platform !== 'linux' && useDllRedirect) {
+      // Inject-and-spawn path. The injector returns the child PID
+      // synchronously, so we pre-bind it to the account ID — that means
+      // waitForAccountProcess finds the binding immediately instead of
+      // having to discover it via WMI / mumble link.
+      const gw2WorkingDirectory = path.dirname(gw2Path);
+      const localDatPath = getAccountLocalDatPath(account.id);
+      logMain('launch', `Launching account=${id} via DLL-injected direct executable with ${args.length} args`);
+      const injectResult = injectDll({
+        exe: gw2Path,
+        cwd: gw2WorkingDirectory,
+        localDat: localDatPath,
+        childArgs: args,
+      });
+      if (!injectResult.ok || typeof injectResult.pid !== 'number') {
+        logMainError('launch', `[dll-redirect] inject failed for account=${id}: ${injectResult.reason ?? 'unknown'}`);
+        launchStateMachine.setState(id, 'errored', 'verified', `Inject-and-spawn failed: ${injectResult.reason ?? 'unknown'}`);
+        return false;
+      }
+      logMain('launch', `[dll-redirect] account=${id} injected and resumed; pid=${injectResult.pid}`);
+      manualAccountPidBindings.set(id, injectResult.pid);
+      launchStateMachine.setState(id, 'launcher_started', 'verified', 'DLL-injected direct executable launched');
+    } else if (gw2Path && process.platform !== 'linux') {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
@@ -1908,7 +1959,7 @@ async function doLaunch(id: string): Promise<boolean> {
     if (typeof boundPid === 'number') {
       quitWatcher.noteLaunch(id, boundPid);
     }
-    if (process.platform === 'win32' && !useJunction) {
+    if (process.platform === 'win32' && !useJunction && !useDllRedirect) {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
       await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
     }
