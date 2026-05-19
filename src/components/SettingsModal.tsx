@@ -335,33 +335,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Experimental */}
-                    <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
-                        <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
-                        <label className="flex items-start gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="mt-1"
-                                checked={allowMultiInstance}
-                                onChange={(e) => {
-                                    if (e.target.checked && !allowMultiInstance) {
-                                        setAllowMultiInstance(true);            // optimistic
-                                        setShowMultiInstanceConfirm(true);
-                                    } else {
-                                        setAllowMultiInstance(false);
-                                    }
-                                }}
-                            />
-                            <div>
-                                <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
-                                <div className="text-xs text-[var(--theme-text-dim)] mt-1">
-                                    Lets AxiAM launch more than one Guild Wars 2 client at a time by closing the
-                                    game's single-instance lock. Multi-boxing is tolerated by ArenaNet but not
-                                    officially supported — use at your own risk.
+                    {/* Experimental — Windows only. The DLL-injection-based
+                       per-account-credentials strategy is implemented for
+                       Win32 Gw2-64.exe; Linux/Proton needs a different
+                       approach (Wine DLL overrides, WINE_OVERRIDES, or a
+                       Wine-aware shim) that we haven't tackled yet. */}
+                    {window.api.platform === 'win32' && (
+                        <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
+                            <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    checked={allowMultiInstance}
+                                    onChange={(e) => {
+                                        if (e.target.checked && !allowMultiInstance) {
+                                            setAllowMultiInstance(true);            // optimistic
+                                            setShowMultiInstanceConfirm(true);
+                                        } else {
+                                            setAllowMultiInstance(false);
+                                        }
+                                    }}
+                                />
+                                <div>
+                                    <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
+                                    <div className="text-xs text-[var(--theme-text-dim)] mt-1">
+                                        Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
+                                        own credentials. Multi-boxing is tolerated by ArenaNet but not officially
+                                        supported — use at your own risk. First launch of a new account will pre-fill
+                                        another account's email; log in once with the correct account and it'll save
+                                        per-account from then on.
+                                    </div>
                                 </div>
-                            </div>
-                        </label>
-                    </div>
+                            </label>
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>
@@ -386,10 +394,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     <h4 className="text-sm font-medium text-[var(--theme-text)] mb-2">
                         Enable multi-instance launches?
                     </h4>
+                    <p className="text-xs text-[var(--theme-text-dim)] mb-3">
+                        AxiAM will close a kernel object inside the running GW2 process so a
+                        second client can start, and inject a small library into each
+                        Gw2-64.exe that redirects credential reads to a per-account file —
+                        the same techniques used by Gw2Launcher for over a decade.
+                    </p>
                     <p className="text-xs text-[var(--theme-text-dim)] mb-4">
-                        This closes a kernel object inside the running GW2 process so a
-                        second client can start. It's the same technique used by
-                        Gw2Launcher, but isn't endorsed by ArenaNet. Continue?
+                        Tolerated by ArenaNet but not officially endorsed. The first launch
+                        of each new account pre-fills another account's email; log in once
+                        with the correct account and it saves per-profile from then on.
+                        Continue?
                     </p>
                     <div className="flex justify-end gap-2">
                         <button

@@ -1,9 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: (key: string) => {
+      if (key === 'userData') return '/test-userdata';
+      if (key === 'home') return '/test-home';
+      return '/tmp';
+    },
+  },
+}));
 import {
   migrateLegacyLocalDat,
   type MigrationFs,
   type MigrationResult,
 } from './localDat.js';
+import { installSnapshotToHost, snapshotHostToAccount, type CopyFs } from './localDat.js';
 import * as path from 'path';
 
 type FsSpy = {
@@ -148,5 +159,157 @@ describe('migrateLegacyLocalDat', () => {
     );
     expect(second.migratedAccountIds).toEqual([]);
     expect(spy.renames.length).toBe(renamesAfterFirst); // no new renames
+  });
+});
+
+type CopyFsSpy = {
+  fs: CopyFs;
+  existing: Set<string>;
+  copies: Array<{ src: string; dest: string }>;
+  mkdirs: string[];
+  failNextCopyWith?: NodeJS.ErrnoException;
+};
+
+function fakeCopyFs(initialFiles: string[]): CopyFsSpy {
+  const existing = new Set<string>(initialFiles);
+  for (const file of initialFiles) {
+    let dir = path.dirname(file);
+    while (dir && dir !== path.dirname(dir)) {
+      existing.add(dir);
+      dir = path.dirname(dir);
+    }
+  }
+  const copies: Array<{ src: string; dest: string }> = [];
+  const mkdirs: string[] = [];
+  const spy: CopyFsSpy = {
+    fs: {
+      existsSync: (p) => existing.has(p),
+      mkdirSync: (p, _opts) => {
+        mkdirs.push(p);
+        let dir = p;
+        while (dir && dir !== path.dirname(dir)) {
+          existing.add(dir);
+          dir = path.dirname(dir);
+        }
+      },
+      copyFileSync: (src, dest) => {
+        if (spy.failNextCopyWith) {
+          const err = spy.failNextCopyWith;
+          spy.failNextCopyWith = undefined;
+          throw err;
+        }
+        copies.push({ src, dest });
+        existing.add(dest);
+        let dir = path.dirname(dest);
+        while (dir && dir !== path.dirname(dir)) {
+          existing.add(dir);
+          dir = path.dirname(dir);
+        }
+      },
+    },
+    existing,
+    copies,
+    mkdirs,
+  };
+  return spy;
+}
+
+// `installSnapshotToHost` resolves the host path via APPDATA env. Tests set it
+// before calling and restore it afterward so we don't pollute other tests.
+function withAppData<T>(value: string | undefined, fn: () => T): T {
+  const previous = process.env.APPDATA;
+  if (value === undefined) {
+    delete process.env.APPDATA;
+  } else {
+    process.env.APPDATA = value;
+  }
+  try {
+    return fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.APPDATA;
+    } else {
+      process.env.APPDATA = previous;
+    }
+  }
+}
+
+describe('installSnapshotToHost', () => {
+  it('returns no-snapshot when the per-account snapshot does not exist', () => {
+    const spy = fakeCopyFs([]);
+    const result = withAppData('/host', () => installSnapshotToHost('acc-a', spy.fs));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('no-snapshot');
+    expect(spy.copies).toEqual([]);
+  });
+
+  it('copies the snapshot over the host Local.dat on success', () => {
+    const spy = fakeCopyFs([]);
+    // The function will call existsSync(getAccountLocalDatPath('acc-a')) — return true
+    // for the source so the function proceeds, capture the exact src path from the copies log.
+    spy.fs.existsSync = (p) => p.includes('Local.dat') ? true : spy.existing.has(p);
+    const result = withAppData('/host', () => installSnapshotToHost('acc-a', spy.fs));
+    expect(result).toEqual({ ok: true });
+    expect(spy.copies.length).toBe(1);
+    expect(spy.copies[0].dest).toBe(path.join('/host', 'Guild Wars 2', 'Local.dat'));
+    expect(spy.copies[0].src.endsWith(path.join('Guild Wars 2', 'Local.dat'))).toBe(true);
+  });
+
+  it('creates the host Guild Wars 2 directory when missing', () => {
+    const spy = fakeCopyFs([]);
+    spy.fs.existsSync = (p) => p.endsWith(path.join('Guild Wars 2', 'Local.dat')) && !p.startsWith('/host');
+    // The destination dir does NOT exist yet; force mkdir.
+    const result = withAppData('/host', () => installSnapshotToHost('acc-a', spy.fs));
+    expect(result.ok).toBe(true);
+    expect(spy.mkdirs).toContain(path.join('/host', 'Guild Wars 2'));
+  });
+
+  it('returns the error code on copy failure', () => {
+    const spy = fakeCopyFs([]);
+    spy.fs.existsSync = () => true;
+    spy.failNextCopyWith = Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' }) as NodeJS.ErrnoException;
+    const result = withAppData('/host', () => installSnapshotToHost('acc-a', spy.fs));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('EBUSY');
+  });
+});
+
+describe('snapshotHostToAccount', () => {
+  it('returns no-host-file when the host Local.dat does not exist', () => {
+    const spy = fakeCopyFs([]);
+    const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('no-host-file');
+    expect(spy.copies).toEqual([]);
+  });
+
+  it('copies the host Local.dat into the per-account profile dir on success', () => {
+    const spy = fakeCopyFs([]);
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
+    const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
+    expect(result).toEqual({ ok: true });
+    expect(spy.copies.length).toBe(1);
+    expect(spy.copies[0].src).toBe(path.join('/host', 'Guild Wars 2', 'Local.dat'));
+    expect(spy.copies[0].dest.endsWith(path.join('profiles', 'acc-a', 'Guild Wars 2', 'Local.dat'))).toBe(true);
+  });
+
+  it('creates the per-account Guild Wars 2 directory when missing', () => {
+    const spy = fakeCopyFs([]);
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
+    const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
+    expect(result.ok).toBe(true);
+    expect(spy.mkdirs.some((dir) => dir.endsWith(path.join('profiles', 'acc-a', 'Guild Wars 2')))).toBe(true);
+  });
+
+  it('returns the error code on copy failure', () => {
+    const spy = fakeCopyFs([]);
+    const hostRoot = path.normalize('/host');
+    spy.fs.existsSync = (p) => p.startsWith(hostRoot);
+    spy.failNextCopyWith = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }) as NodeJS.ErrnoException;
+    const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('EACCES');
   });
 });

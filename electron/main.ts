@@ -12,7 +12,11 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { getAccountAppDataDir, hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath, seedAccountLocalDatFromHost } from './localDat.js';
+import { injectDll } from './dllInjector.js';
+import { migrateGw2DirToJunction, repointJunction, unmigrateJunctionToRealDir } from './junction.js';
+import * as launchSerializer from './launchSerializer.js';
+import { quitWatcher } from './quitWatcher.js';
 import {
   getHelperPath,
   runMutexCloserDirect,
@@ -31,6 +35,12 @@ const require = createRequire(import.meta.url);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
+}
+
+// Dev-only userData override so local iteration doesn't collide with a real
+// AxiAM install. Set AXIAM_DEV_DATA_DIR to an absolute path before `npm run dev`.
+if (process.env.AXIAM_DEV_DATA_DIR) {
+  app.setPath('userData', process.env.AXIAM_DEV_DATA_DIR);
 }
 
 // ─── Migration: clean up stale updater cache from pre-rename installs ────────
@@ -105,6 +115,27 @@ const SAFE_STORAGE_PREFIX = 'safe:';
 const STEAM_GW2_APP_ID = '1284210';
 const WINDOWS_PROCESS_SNAPSHOT_TTL_MS = 1500;
 const LINUX_PROCESS_WAIT_TIMEOUT_MS = 180000;
+const LAUNCH_DWELL_AFTER_DETECTED_MS = 4000;
+const LAUNCH_DWELL_MULTI_INSTANCE_MS = 20000;
+const INSTALL_RETRY_TOTAL_MS = 3000;
+const INSTALL_RETRY_INTERVAL_MS = 200;
+const QUIT_WATCHER_POLL_INTERVAL_MS = 2000;
+// Per-account launch context used by the quit handler to decide whether to
+// snapshot the host Local.dat back into the profile.
+//
+// `installed=true` means the host file was populated from this account's own
+// snapshot at launch — saving it back is always safe (worst case: re-save same
+// data). `installed=false` means no snapshot existed; the host could hold any
+// previous account's credentials. In that case we only snapshot if the user
+// stayed in GW2 long enough to plausibly have authenticated (the elapsed
+// threshold below), otherwise a quick Stop would clobber this account's
+// profile with the prior account's data.
+interface LaunchContext {
+  installed: boolean;
+  startedAtMs: number;
+}
+const launchContexts = new Map<string, LaunchContext>();
+const FRESH_LAUNCH_MIN_SAVE_MS = 15000;
 let windowsProcessSnapshotCache: { timestamp: number; processes: any[] } = { timestamp: 0, processes: [] };
 let resolvedWindowsPowerShellPath: string | null = null;
 // Windows fallback: when WMI returns null CommandLine (e.g. for elevated GW2
@@ -1174,6 +1205,130 @@ app.on('ready', () => {
     logMainError('startup', `[migration:profiles] unexpected error: ${err?.message ?? err}`);
   }
 
+  // Junction migration (Windows + opt-in flag). Idempotent: subsequent runs
+  // detect the existing junction and no-op. Refuses to migrate while GW2 is
+  // running so we don't yank a directory out from under live file handles.
+  //
+  // The DLL-redirect flag takes precedence: if it's on we un-migrate the
+  // junction (or no-op if there isn't one) so the host appdata path is a
+  // real directory again. The DLL-redirect strategy needs a shared real
+  // directory at hostPath because the launcher's update check coordinates
+  // across all instances through it.
+  if (process.platform === 'win32') {
+    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
+    const appData = process.env.APPDATA;
+    if (settings.allowMultiInstance) {
+      if (!appData) {
+        logMainWarn('startup', '[dll-redirect] APPDATA env var missing; cannot un-migrate junction');
+      } else {
+        const hostPath = path.join(appData, 'Guild Wars 2');
+        const defaultProfileDir = path.join(
+          app.getPath('userData'),
+          'default-gw2-state',
+          'Guild Wars 2',
+        );
+        try {
+          const result = unmigrateJunctionToRealDir({
+            hostPath,
+            defaultProfileDir,
+            isGw2Running: () => getAllRunningGw2Pids().length > 0,
+          });
+          logMain('startup', `[dll-redirect] un-junction: ${result.status} (${result.movedFiles} files)`);
+          if (result.status === 'refused-gw2-running' && mainWindow) {
+            mainWindow.webContents.send('junction-migration-deferred');
+          }
+        } catch (err: any) {
+          logMainError('startup', `[dll-redirect] un-junction failed: ${err?.message ?? err}`);
+        }
+      }
+    } else if (settings.junctionMultiInstance) {
+      if (!appData) {
+        logMainWarn('startup', '[junction] APPDATA env var missing; cannot migrate');
+      } else {
+        const hostPath = path.join(appData, 'Guild Wars 2');
+        const defaultProfileDir = path.join(
+          app.getPath('userData'),
+          'default-gw2-state',
+          'Guild Wars 2',
+        );
+        try {
+          const result = migrateGw2DirToJunction({
+            hostPath,
+            defaultProfileDir,
+            isGw2Running: () => getAllRunningGw2Pids().length > 0,
+          });
+          logMain('startup', `[junction] migration: ${result.status} (${result.movedFiles} files)`);
+          if (result.status === 'refused-gw2-running' && mainWindow) {
+            mainWindow.webContents.send('junction-migration-deferred');
+          }
+        } catch (err: any) {
+          logMainError('startup', `[junction] migration failed: ${err?.message ?? err}`);
+        }
+      }
+    }
+  }
+
+  // Configure and start the quit watcher (Windows only). When a tracked GW2
+  // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
+  // back into the account's profile dir to preserve per-account settings.
+  quitWatcher.configure(() => getAllRunningGw2Pids(), QUIT_WATCHER_POLL_INTERVAL_MS);
+  quitWatcher.on('quit', (accountId: string) => {
+    const ctx = launchContexts.get(accountId);
+    launchContexts.delete(accountId);
+
+    // Reset the state machine ONLY if the current phase reflects a
+    // run that already reached the running state. Without this the UI
+    // keeps showing the running / errored phase from the prior launch
+    // until the user clicks Launch again — confusing when diagnosing
+    // failures. Guard against clobbering a freshly-queued relaunch by
+    // not overwriting launch_requested / launcher_started.
+    const currentPhase = launchStateMachine.getState(accountId)?.phase;
+    if (currentPhase === 'running' || currentPhase === 'process_detected' || currentPhase === 'errored') {
+      launchStateMachine.setState(accountId, 'stopped', 'verified', 'Process exited');
+    }
+
+    // DLL-redirect mode (implicit under allowMultiInstance on Windows):
+    // GW2's every Local.dat open was rewritten to the per-account file
+    // in-process, so the host file never held this account's data.
+    // Nothing to copy back.
+    const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
+    if (process.platform === 'win32' && settings.allowMultiInstance) {
+      logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
+      return;
+    }
+    // Junction mode: GW2 wrote in place into the account's profile dir via
+    // the repointed junction, so there's nothing to snapshot back.
+    if (settings.junctionMultiInstance) {
+      logMain('snapshot', `[junction] account=${accountId} quit; state already persisted in-place`);
+      return;
+    }
+
+    const remaining = getAllRunningGw2Pids();
+    if (remaining.length > 0) {
+      logMain('snapshot', `[snapshot] account=${accountId} quit but ${remaining.length} other GW2 still running; skipping copy-back to avoid cross-contamination`);
+      return;
+    }
+
+    // Fresh account (no snapshot existed at launch, so no install ran). Host
+    // could hold any prior account's data; only save if the user stayed long
+    // enough to plausibly have authenticated.
+    if (ctx && !ctx.installed) {
+      const elapsedMs = Date.now() - ctx.startedAtMs;
+      if (elapsedMs < FRESH_LAUNCH_MIN_SAVE_MS) {
+        logMain('snapshot', `[snapshot] account=${accountId} skipped: fresh-account quit after ${elapsedMs}ms (<${FRESH_LAUNCH_MIN_SAVE_MS}ms threshold) — likely no authentication happened`);
+        return;
+      }
+    }
+
+    const result = snapshotHostToAccount(accountId);
+    if (result.ok) {
+      logMain('snapshot', `[snapshot] account=${accountId} copied Local.dat host → profile`);
+    } else {
+      logMainWarn('snapshot', `[snapshot] account=${accountId} skipped: ${result.reason}`);
+    }
+  });
+  quitWatcher.start();
+
   console.log("User Data Path:", app.getPath('userData'));
   fs.writeFileSync(path.join(app.getPath('userData'), 'axiom-version'), app.getVersion(), 'utf8');
   if (process.platform === 'win32') {
@@ -1200,6 +1355,10 @@ app.on('ready', () => {
       void checkForUpdates('startup');
     }, 3000);
   }
+});
+
+app.on('before-quit', () => {
+  quitWatcher.stop();
 });
 
 app.on('window-all-closed', () => {
@@ -1468,6 +1627,7 @@ ipcMain.handle('stop-account-process', async (_, accountId) => {
     showcaseActiveAccounts.delete(String(accountId));
     return true;
   }
+  quitWatcher.noteStop(accountId);
   return stopAccountProcess(accountId);
 });
 
@@ -1564,7 +1724,20 @@ ipcMain.handle('delete-account', async (_, id) => {
   return true;
 });
 
-ipcMain.handle('launch-account', async (_, id) => {
+async function installSnapshotToHostWithRetry(
+  accountId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const start = Date.now();
+  let lastResult = installSnapshotToHost(accountId);
+  while (!lastResult.ok && Date.now() - start < INSTALL_RETRY_TOTAL_MS) {
+    if (lastResult.reason === 'no-snapshot') return lastResult;
+    await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_INTERVAL_MS));
+    lastResult = installSnapshotToHost(accountId);
+  }
+  return lastResult;
+}
+
+async function doLaunch(id: string): Promise<boolean> {
   if (isDevShowcase) {
     showcaseActiveAccounts.clear();
     showcaseActiveAccounts.add(String(id));
@@ -1583,8 +1756,16 @@ ipcMain.handle('launch-account', async (_, id) => {
     return false;
   }
 
-  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean } | undefined) || {};
+  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
+  // Multi-instance implies per-account DLL redirect on Windows. The
+  // DLL redirect is the only strategy that actually delivers
+  // concurrent multi-launch — take-2 and take-3 both fail with
+  // "Download failed (5)" on the second client — so tying the two
+  // together removes a foot-gun: no way to enable multi-instance and
+  // unwittingly stay on the broken path.
+  const useDllRedirect = process.platform === 'win32' && launchSettings.allowMultiInstance === true;
+  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true && !useDllRedirect;
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
     console.error(`GW2 path does not exist: ${gw2Path}`);
@@ -1628,27 +1809,118 @@ ipcMain.handle('launch-account', async (_, id) => {
       return false;
     }
     logMain('launch', `[mutex] Closed AN-Mutex on ${mutexResult.closedCount} existing GW2 process(es)`);
+
+    // Give the already-running instance time to finish its patcher / update
+    // check before spawning ours. Without this wait the second instance hits
+    // "Download failed (5)" on the splash screen because both clients race
+    // ArenaNet's update endpoint.
+    if (process.platform === 'win32') {
+      logMain('launch', `[multi-instance] account=${id} waiting ${LAUNCH_DWELL_MULTI_INSTANCE_MS}ms for prior GW2 to settle before spawning`);
+      await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_MULTI_INSTANCE_MS));
+    }
   }
 
   const extraArgs = splitLaunchArguments(account.launchArguments);
   const sanitizedExtraArgs = stripManagedLaunchArguments(extraArgs);
   const mumbleName = getAccountMumbleName(account.id);
 
-  // Each account runs against its own AppData via the APPDATA env injected on
-  // spawn (see below). Autologin works whenever Local.dat exists in the account
-  // profile dir, even with other GW2 instances running concurrently.
-  const hasAuth = hasLocalDat(account.id);
-  if (hasAuth) {
+  // Per-account autologin: install the account's Local.dat at the host path
+  // (or re-point the junction at the account's profile dir under junction
+  // mode) before spawn so GW2 reads this account's saved credentials.
+  //
+  // Under dllRedirectMultiInstance, no host-path manipulation is needed:
+  // the injected DLL rewrites every NtCreateFile of Local.dat to the
+  // per-account file directly. The profile dir still needs to exist (so
+  // the DLL has somewhere to write to on first save) but otherwise this
+  // whole block is a no-op for the redirect mode.
+  let useAutologin = hasLocalDat(account.id);
+  if (useDllRedirect) {
+    const profileDir = path.dirname(getAccountLocalDatPath(account.id));
+    if (!fs.existsSync(profileDir)) {
+      fs.mkdirSync(profileDir, { recursive: true });
+    }
+    // Seed the per-account Local.dat from the host file if this account
+    // is new. Local.dat carries ~70MB of patcher cache in addition to
+    // credentials — without that cache the launcher refuses to progress.
+    const seedResult = seedAccountLocalDatFromHost(account.id);
+    if (seedResult.ok) {
+      // hasLocalDat() was evaluated above against the snapshot path; if
+      // we just seeded a copy of the host file the redirect target now
+      // contains creds (possibly another account's, but valid). -autologin
+      // will pre-fill those; the user re-logs once and they get overwritten.
+      useAutologin = true;
+      logMain('launch', `[dll-redirect] account=${id} seeded profile Local.dat from host; redirect armed`);
+    } else {
+      logMainWarn('launch', `[dll-redirect] account=${id} seed skipped (${seedResult.reason}); launcher may need to rebuild its cache`);
+    }
+  } else if (useJunction) {
+    const appData = process.env.APPDATA;
+    const hostPath = appData ? path.join(appData, 'Guild Wars 2') : null;
+    const profileDir = path.join(
+      app.getPath('userData'),
+      'profiles',
+      account.id,
+      'Guild Wars 2',
+    );
+    if (!hostPath) {
+      logMainWarn('launch', `[junction] account=${id} APPDATA missing; launching without -autologin`);
+      useAutologin = false;
+    } else {
+      if (!fs.existsSync(profileDir)) {
+        // Fresh account: create the profile dir so the junction has somewhere
+        // to point. GW2 will create Local.dat on first save.
+        fs.mkdirSync(profileDir, { recursive: true });
+      }
+      try {
+        repointJunction(hostPath, profileDir);
+        logMain('launch', `[junction] account=${id} repointed → ${profileDir}`);
+      } catch (err: any) {
+        logMainError('launch', `[junction] account=${id} repoint failed: ${err?.message ?? err}; launching without -autologin`);
+        useAutologin = false;
+      }
+    }
+  } else if (useAutologin && process.platform === 'win32') {
+    const installResult = await installSnapshotToHostWithRetry(account.id);
+    if (installResult.ok) {
+      logMain('launch', `[install] account=${id} installed snapshot to host path`);
+    } else if (installResult.reason === 'no-snapshot') {
+      // Shouldn't happen — hasLocalDat returned true. Defensive log.
+      logMainWarn('launch', `[install] account=${id} unexpected no-snapshot after hasLocalDat=true`);
+      useAutologin = false;
+    } else {
+      logMainWarn('launch', `[install] account=${id} retry exhausted (${installResult.reason}); launching without -autologin`);
+      useAutologin = false;
+    }
+  } else if (useAutologin) {
+    // Linux/other platforms: -autologin still gated on hasLocalDat but no host
+    // install happens. The Linux launch goes through Steam/Proton.
     logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
   }
 
+  // Always pass -shareArchive so concurrent instances can both open the
+  // shared game data archive (Gw2.dat) in the install directory. Safe for
+  // single-instance launches too. Skipped if the user already supplied it
+  // via their per-account launchArguments (sanitizedExtraArgs).
+  const userExtras = sanitizedExtraArgs;
+  const hasShareArchive = userExtras.some((a) => a.toLowerCase() === '-sharearchive');
   const args = [
     '-mumble', mumbleName,
-    ...(hasAuth ? ['-autologin'] : []),
-    ...sanitizedExtraArgs,
+    ...(useAutologin ? ['-autologin'] : []),
+    ...(hasShareArchive ? [] : ['-shareArchive']),
+    ...userExtras,
   ];
+
+  // Remember whether install populated the host with this account's data
+  // and when the launch started. The quit handler uses both to decide
+  // whether snapshotting host → profile is safe.
+  if (process.platform === 'win32') {
+    launchContexts.set(id, {
+      installed: useAutologin,
+      startedAtMs: Date.now(),
+    });
+  }
 
   // Snapshot existing GW2 pids before launch so we can attribute any new
   // pid to this account when WMI hides the elevated process's command line.
@@ -1662,18 +1934,37 @@ ipcMain.handle('launch-account', async (_, id) => {
   try {
     // On Linux, always launch via Steam so Proton handles the Windows executable
     // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
-    if (gw2Path && process.platform !== 'linux') {
+    if (gw2Path && process.platform !== 'linux' && useDllRedirect) {
+      // Inject-and-spawn path. The injector returns the child PID
+      // synchronously, so we pre-bind it to the account ID — that means
+      // waitForAccountProcess finds the binding immediately instead of
+      // having to discover it via WMI / mumble link.
+      const gw2WorkingDirectory = path.dirname(gw2Path);
+      const localDatPath = getAccountLocalDatPath(account.id);
+      logMain('launch', `Launching account=${id} via DLL-injected direct executable with ${args.length} args`);
+      const injectResult = injectDll({
+        exe: gw2Path,
+        cwd: gw2WorkingDirectory,
+        localDat: localDatPath,
+        childArgs: args,
+      });
+      if (!injectResult.ok || typeof injectResult.pid !== 'number') {
+        logMainError('launch', `[dll-redirect] inject failed for account=${id}: ${injectResult.reason ?? 'unknown'}`);
+        launchStateMachine.setState(id, 'errored', 'verified', `Inject-and-spawn failed: ${injectResult.reason ?? 'unknown'}`);
+        return false;
+      }
+      logMain('launch', `[dll-redirect] account=${id} injected and resumed; pid=${injectResult.pid}`);
+      manualAccountPidBindings.set(id, injectResult.pid);
+      launchStateMachine.setState(id, 'launcher_started', 'verified', 'DLL-injected direct executable launched');
+    } else if (gw2Path && process.platform !== 'linux') {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
-      const accountAppDataDir = getAccountAppDataDir(account.id);
-      logMain('launch', `[profile] account=${id} APPDATA=${accountAppDataDir}`);
       const child = spawn(gw2Path, args, {
         cwd: gw2WorkingDirectory,
         detached: true,
         stdio: 'ignore',
         windowsHide: false,
-        env: { ...process.env, APPDATA: accountAppDataDir },
       });
       child.on('error', (spawnError) => {
         console.error(`Spawn error: ${spawnError.message}`);
@@ -1713,8 +2004,38 @@ ipcMain.handle('launch-account', async (_, id) => {
     logMain('launch', `Account=${id} process detected and bound`);
     launchStateMachine.setState(id, 'process_detected', 'verified', 'Account process detected');
     launchStateMachine.setState(id, 'running', 'verified', 'Running with mapped process');
+    // Register the binding before the dwell so quitWatcher is watching as
+    // early as possible — a fast crash during the dwell still gets noticed
+    // when the next poll runs.
+    const boundPid = manualAccountPidBindings.get(id)
+      ?? getActiveAccountProcesses().find((p) => p.accountId === id)?.pid;
+    if (typeof boundPid === 'number') {
+      quitWatcher.noteLaunch(id, boundPid);
+    }
+    if (process.platform === 'win32' && !useJunction && !useDllRedirect) {
+      logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
+      await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
+    }
   }
   return launched;
+}
+
+ipcMain.handle('launch-account', async (_, id) => {
+  // Set the requested phase up front so the cancellation check below only
+  // catches Stop clicks that happened during the serializer wait. Otherwise a
+  // stale 'stopped' from an earlier session would block every future launch.
+  launchStateMachine.setState(id, 'launch_requested', 'verified', 'Launch requested (queued)');
+  const release = await launchSerializer.acquire();
+  try {
+    const queuedState = launchStateMachine.getState(id);
+    if (queuedState && (queuedState.phase === 'stopping' || queuedState.phase === 'stopped')) {
+      logMain('launch', `[serializer] account=${id} skipped: launch was cancelled while queued (phase=${queuedState.phase})`);
+      return false;
+    }
+    return await doLaunch(id);
+  } finally {
+    release();
+  }
 });
 
 ipcMain.handle('get-launch-error', async (_, id) => {

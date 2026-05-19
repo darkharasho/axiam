@@ -1,0 +1,38 @@
+[package]
+name = "axiam-local-dat-redirect"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "axiam_local_dat_redirect"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true
+panic = "abort"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_Storage_FileSystem",
+    "Wdk_Foundation",
+    "Wdk_Storage_FileSystem",
+    "Wdk_System_SystemServices",
+] }
+minhook-sys = "0.1"
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+] }

@@ -34,21 +34,7 @@ export function getSteamLibraryPaths(): string[] {
 }
 
 /**
- * Returns the per-account AppData root we point GW2 at via the APPDATA env var.
- * Creates the directory on demand. GW2 will write its own `Guild Wars 2/`
- * subdirectory inside.
- */
-export function getAccountAppDataDir(accountId: string): string {
-  const dir = path.join(app.getPath('userData'), 'profiles', accountId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
-/**
- * Path to where Local.dat will land once GW2 writes it for this account.
- * Internal helper — exposed only so tests and migration code can reuse it.
+ * Path to where the per-account Local.dat snapshot lives on disk.
  */
 export function getAccountLocalDatPath(accountId: string): string {
   return path.join(
@@ -61,21 +47,148 @@ export function getAccountLocalDatPath(accountId: string): string {
 }
 
 /**
- * True iff this account has a Local.dat inside its profile directory.
- * Drives the "Saved" badge in the UI.
+ * True iff this account has a saved Local.dat snapshot in its profile directory.
  */
 export function hasLocalDat(accountId: string): boolean {
   return fs.existsSync(getAccountLocalDatPath(accountId));
 }
 
 /**
- * Remove this account's entire profile directory (`userData/profiles/<id>/`)
- * along with everything GW2 wrote inside. Idempotent — no throw if missing.
+ * Remove this account's entire profile directory and everything inside it.
+ * Idempotent — no throw if missing.
  */
 export function deleteLocalDat(accountId: string): void {
   const dir = path.join(app.getPath('userData'), 'profiles', accountId);
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Internal: path to the host's GW2 Local.dat (where the running game reads/writes).
+ * Windows-only — Linux callers don't manipulate the host path.
+ */
+function getHostLocalDatPath(): string {
+  const appData = process.env.APPDATA;
+  if (!appData) {
+    throw new Error('APPDATA env var is not set; cannot resolve host Local.dat path');
+  }
+  return path.join(appData, 'Guild Wars 2', 'Local.dat');
+}
+
+export interface CopyResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Inject the dependencies for testability. Real callers pass `node:fs` directly.
+ */
+export interface CopyFs {
+  existsSync: (p: string) => boolean;
+  mkdirSync: (p: string, opts: { recursive: boolean }) => void;
+  copyFileSync: (src: string, dest: string) => void;
+}
+
+/**
+ * Copy the account's per-profile Local.dat snapshot over the host file so the
+ * about-to-be-spawned Gw2-64.exe will read it via -autologin.
+ *
+ * Caller is expected to gate on `hasLocalDat(accountId)` first. Calling without
+ * a snapshot returns `{ ok: false, reason: 'no-snapshot' }` defensively.
+ *
+ * Returns `{ ok: false, reason: 'EBUSY' | 'EACCES' | 'EPERM' | <other> }` on
+ * filesystem failures. The caller decides whether to retry or proceed without
+ * -autologin.
+ */
+export function installSnapshotToHost(
+  accountId: string,
+  filesystem: CopyFs = fs,
+): CopyResult {
+  const src = getAccountLocalDatPath(accountId);
+  if (!filesystem.existsSync(src)) {
+    return { ok: false, reason: 'no-snapshot' };
+  }
+  const dest = getHostLocalDatPath();
+  const destDir = path.dirname(dest);
+  try {
+    if (!filesystem.existsSync(destDir)) {
+      filesystem.mkdirSync(destDir, { recursive: true });
+    }
+    filesystem.copyFileSync(src, dest);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
+  }
+}
+
+/**
+ * Copy the host Local.dat back into the account's profile directory so future
+ * launches and the "Saved" badge reflect the latest state (credentials +
+ * settings GW2 wrote during the session).
+ *
+ * Returns `{ ok: false, reason: 'no-host-file' }` if the host Local.dat doesn't
+ * exist (rare; warrants a warning at the call site).
+ */
+export function snapshotHostToAccount(
+  accountId: string,
+  filesystem: CopyFs = fs,
+): CopyResult {
+  const src = getHostLocalDatPath();
+  if (!filesystem.existsSync(src)) {
+    return { ok: false, reason: 'no-host-file' };
+  }
+  const dest = getAccountLocalDatPath(accountId);
+  const destDir = path.dirname(dest);
+  try {
+    if (!filesystem.existsSync(destDir)) {
+      filesystem.mkdirSync(destDir, { recursive: true });
+    }
+    filesystem.copyFileSync(src, dest);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
+  }
+}
+
+/**
+ * Seed the per-account Local.dat from the host file IFF the per-account
+ * file does not yet exist. Used by the DLL-redirect path so a fresh
+ * account's profile starts with a valid patcher cache copied from the
+ * host — Local.dat is not just credentials, it's also ~70MB of
+ * launcher / patcher state, and an empty file makes the launcher refuse
+ * to progress past its update check.
+ *
+ * Whatever credentials the host file held will appear pre-filled on the
+ * first launch of this account. They get overwritten the first time the
+ * user logs in as this account and ticks Remember Account Information.
+ *
+ * Idempotent: if the per-account file already exists, this is a no-op
+ * that returns `{ ok: true }`. If the host file is missing too, returns
+ * `{ ok: false, reason: 'no-host-file' }` and the caller can choose to
+ * launch GW2 anyway (the launcher will just have to rebuild its cache).
+ */
+export function seedAccountLocalDatFromHost(
+  accountId: string,
+  filesystem: CopyFs = fs,
+): CopyResult {
+  const dest = getAccountLocalDatPath(accountId);
+  if (filesystem.existsSync(dest)) {
+    return { ok: true };
+  }
+  const src = getHostLocalDatPath();
+  if (!filesystem.existsSync(src)) {
+    return { ok: false, reason: 'no-host-file' };
+  }
+  const destDir = path.dirname(dest);
+  try {
+    if (!filesystem.existsSync(destDir)) {
+      filesystem.mkdirSync(destDir, { recursive: true });
+    }
+    filesystem.copyFileSync(src, dest);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
   }
 }
 
@@ -100,10 +213,6 @@ export interface MigrationResult {
 /**
  * Move legacy `userData/local-dat/<id>.dat` files into the per-account profile
  * layout. Idempotent: re-running after a successful migration is a no-op.
- *
- * Layout transform (per account):
- *   userData/local-dat/<id>.dat
- *     →  userData/profiles/<id>/Guild Wars 2/Local.dat
  */
 export function migrateLegacyLocalDat(
   args: { userDataDir: string; accountIds: string[] },
@@ -120,10 +229,10 @@ export function migrateLegacyLocalDat(
 
   for (const accountId of args.accountIds) {
     const newPath = path.join(args.userDataDir, 'profiles', accountId, 'Guild Wars 2', 'Local.dat');
-    if (filesystem.existsSync(newPath)) continue; // already migrated; idempotent
+    if (filesystem.existsSync(newPath)) continue;
 
     const oldPath = path.join(legacyDir, `${accountId}.dat`);
-    if (!filesystem.existsSync(oldPath)) continue; // nothing to migrate for this account
+    if (!filesystem.existsSync(oldPath)) continue;
 
     try {
       const newDir = path.dirname(newPath);
