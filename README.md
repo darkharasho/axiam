@@ -2,6 +2,8 @@
 
 A desktop account launcher focused on speed, security, and clean multi-account workflow.
 
+**Marketing site:** https://darkharasho.github.io/axiam/ — screenshots and feature overview.
+
 ## User Features
 - **Secure account vault**: credentials are encrypted locally with a master password.
 - **Multi-account management**: add, edit, and organize as many accounts as you need.
@@ -133,5 +135,6 @@ A: Unsigned builds trigger SmartScreen warnings. Official releases are code-sign
 This project is licensed under the [MIT License](LICENSE).
 
 ## Project Links
+- Marketing site: https://darkharasho.github.io/axiam/
 - Discord: `https://discord.gg/UjzMXMGXEg`
 - GitHub: `https://github.com/darkharasho/axiam`
