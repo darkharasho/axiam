@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AxiAM — A vault for your Guild Wars 2 accounts</title>
+  <meta name="description" content="Encrypted desktop account launcher for Guild Wars 2. One master password, one-click Steam launches, zero credentials in the cloud." />
+
+  <meta property="og:title" content="AxiAM — A vault for your Guild Wars 2 accounts" />
+  <meta property="og:description" content="Encrypted desktop account launcher for Guild Wars 2. One master password, one-click Steam launches, zero credentials in the cloud." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://darkharasho.github.io/axiam/" />
+
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- SVG noise grain overlay -->
+<svg class="noise-overlay" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <filter id="noise">
+    <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#noise)" />
+</svg>
+
+<!-- 1. TOP CHROME BAR -->
+<header class="nav" id="site-nav">
+  <a class="nav-brand" href="#top">
+    <img class="nav-logo" src="assets/logo.svg" alt="" width="32" height="32" />
+    <span class="nav-wordmark">AXIAM</span>
+  </a>
+  <nav class="nav-links" aria-label="Site navigation">
+    <a href="#features">FEATURES</a>
+    <a href="#security">SECURITY</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <div class="nav-status">
+    <span class="status-dot" aria-hidden="true"></span>
+    <span class="status-label">SEALED</span>
+    <span class="status-version" id="nav-version">v0.0.0</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- 2. HERO -->
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <div class="hero-brand">
+        <div class="hero-dial" aria-hidden="true">
+          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <g class="dial-ring">
+              <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35" />
+              <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="1" opacity="0.18" stroke-dasharray="2 6" />
+            </g>
+            <g class="dial-ticks" stroke="currentColor" stroke-linecap="round">
+              <g stroke-width="1.5">
+                <line x1="100" y1="6"  x2="100" y2="16" />
+                <line x1="100" y1="184" x2="100" y2="194" />
+                <line x1="6"  y1="100" x2="16" y2="100" />
+                <line x1="184" y1="100" x2="194" y2="100" />
+              </g>
+              <g stroke-width="0.75" opacity="0.55">
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(15  100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(30  100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(45  100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(60  100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(75  100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(105 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(120 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(135 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(150 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(165 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(195 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(210 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(225 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(240 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(255 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(285 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(300 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(315 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(330 100 100)" />
+                <line x1="100" y1="10" x2="100" y2="18" transform="rotate(345 100 100)" />
+              </g>
+            </g>
+          </svg>
+          <img class="hero-logo" src="assets/logo.svg" alt="" width="96" height="96" />
+        </div>
+        <div class="hero-brand-text">
+          <span class="hero-wordmark">AXIAM</span>
+          <span class="hero-eyebrow"><i data-lucide="lock-keyhole"></i>ENCRYPTED ACCOUNT LAUNCHER</span>
+        </div>
+      </div>
+      <h1 class="hero-headline">Unlock your <em>accounts</em>.</h1>
+      <p class="hero-lede">An encrypted desktop vault for your Guild Wars 2 accounts. One master password, one-click Steam launches, and zero credentials in the cloud — ever.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="dl-win" href="https://github.com/darkharasho/axiam/releases/latest">
+          <i data-lucide="download"></i><span>Windows</span>
+        </a>
+        <a class="btn btn-primary" id="dl-linux" href="https://github.com/darkharasho/axiam/releases/latest">
+          <i data-lucide="download"></i><span>Linux</span>
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/darkharasho/axiam" target="_blank" rel="noopener">
+          <span>View source</span><i data-lucide="github"></i>
+        </a>
+      </div>
+      <p class="release-meta" id="release-meta">Latest release on GitHub</p>
+    </div>
+
+    <button class="hero-shot" type="button" data-full="assets/screenshots/hero-app.png" aria-label="AxiAM account vault, full size">
+      <img src="assets/screenshots/hero-app.png" alt="AxiAM — encrypted account vault with multiple accounts ready to launch" loading="eager" />
+    </button>
+  </section>
+
+  <!-- 3. // KEY FEATURES -->
+  <section class="section" id="features">
+    <div class="section-rule">
+      <span class="section-rule-label">// KEY FEATURES</span>
+    </div>
+
+    <div class="feature-grid">
+      <article class="feature-card">
+        <span class="feature-icon"><i data-lucide="shield-check"></i></span>
+        <h3>Encrypted vault</h3>
+        <p>Credentials are encrypted on disk with AES-256-GCM, keyed from your master password. Nothing is sent to a server.</p>
+      </article>
+
+      <article class="feature-card">
+        <span class="feature-icon"><i data-lucide="users"></i></span>
+        <h3>Multi-account workflow</h3>
+        <p>Add, edit, and organize as many GW2 accounts as you need. Each one keeps its own custom launch arguments.</p>
+      </article>
+
+      <article class="feature-card">
+        <span class="feature-icon"><i data-lucide="rocket"></i></span>
+        <h3>One-click launch</h3>
+        <p>Steam integration with managed arguments. Pick an account, hit launch, the game opens — no retyping args every session.</p>
+      </article>
+
+      <article class="feature-card">
+        <span class="feature-icon"><i data-lucide="activity-square"></i></span>
+        <h3>Per-account status</h3>
+        <p>Running, launching, stopping — every account shows live state, so you always know which client is where.</p>
+      </article>
+
+      <article class="feature-card">
+        <span class="feature-icon"><i data-lucide="refresh-cw"></i></span>
+        <h3>Auto-updates &amp; What's New</h3>
+        <p>Animated update indicator and in-app restart. After updating, a What's New screen shows the release notes.</p>
+      </article>
+
+      <article class="feature-card feature-card--wide">
+        <span class="feature-icon"><i data-lucide="key-round"></i></span>
+        <h3>Optional GW2 API key</h3>
+        <p>Drop in a per-account API key and AxiAM resolves account metadata in the UI — character names, world, last-active — so you can tell vaults apart at a glance. The key is encrypted alongside the rest.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- 4. // PROCEDURE -->
+  <section class="section" id="how">
+    <div class="section-rule">
+      <span class="section-rule-label">// PROCEDURE</span>
+    </div>
+
+    <ol class="steps" aria-label="How it works">
+      <li class="step-row">
+        <span class="step-num" aria-hidden="true">01</span>
+        <span class="step-divider" aria-hidden="true">│</span>
+        <div class="step-body">
+          <h3>Set a master password</h3>
+          <p>First launch only. The master password is never stored — it's the only way into the vault.</p>
+        </div>
+      </li>
+      <li class="step-row">
+        <span class="step-num" aria-hidden="true">02</span>
+        <span class="step-divider" aria-hidden="true">│</span>
+        <div class="step-body">
+          <h3>Add your accounts</h3>
+          <p>Drop in credentials and custom launch args. Everything is encrypted at rest with <code>AES-256-GCM</code>.</p>
+        </div>
+      </li>
+      <li class="step-row">
+        <span class="step-num" aria-hidden="true">03</span>
+        <span class="step-divider" aria-hidden="true">│</span>
+        <div class="step-body">
+          <h3>Launch and play</h3>
+          <p>Click an account, AxiAM hands off to Steam with your saved arguments, and you're in.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 5. // SECURITY MODEL -->
+  <section class="section" id="security">
+    <div class="section-rule">
+      <span class="section-rule-label">// SECURITY MODEL</span>
+    </div>
+
+    <div class="security-grid">
+      <article class="security-card">
+        <span class="security-tag">CIPHER</span>
+        <h3>AES-256-GCM</h3>
+        <p>Authenticated encryption via Node's <code>crypto</code> module. Every credential is sealed with an integrity tag — tampering is detectable.</p>
+      </article>
+
+      <article class="security-card">
+        <span class="security-tag">KEY</span>
+        <h3>Derived from your master password</h3>
+        <p>The encryption key is derived at runtime from the password you type. AxiAM does not store it, cache it across reboots, or transmit it.</p>
+      </article>
+
+      <article class="security-card">
+        <span class="security-tag">CADENCE</span>
+        <h3>You choose the prompt rate</h3>
+        <p>Re-prompt for the master password every launch, every session, or after a timeout. Match the vault to how paranoid your week is.</p>
+      </article>
+
+      <article class="security-card">
+        <span class="security-tag">SURFACE</span>
+        <h3>No server. No telemetry.</h3>
+        <p>There is no AxiAM server. Credentials live on your machine and nowhere else. Updates come from GitHub Releases over HTTPS.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- 6. // GALLERY -->
+  <section class="section" id="gallery">
+    <div class="section-rule">
+      <span class="section-rule-label">// GALLERY</span>
+    </div>
+
+    <div class="gallery">
+      <button class="thumb" data-full="assets/screenshots/vault.png" aria-label="Account vault, full size">
+        <img src="assets/screenshots/vault.png" alt="Account vault list with multiple unlocked accounts" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">ACCOUNT VAULT</span>
+          <p class="thumb-desc">All your accounts in one encrypted list. Each card shows live status, launch args, and quick-launch — no submenus to dig through.</p>
+        </div>
+      </button>
+      <button class="thumb" data-full="assets/screenshots/master-password.png" aria-label="Master password prompt, full size">
+        <img src="assets/screenshots/master-password.png" alt="Master password unlock prompt" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">UNLOCK PROMPT</span>
+          <p class="thumb-desc">The only key into the vault. Set the prompt cadence so it asks as often — or as rarely — as you'd like.</p>
+        </div>
+      </button>
+      <button class="thumb" data-full="assets/screenshots/account-edit.png" aria-label="Account edit modal, full size">
+        <img src="assets/screenshots/account-edit.png" alt="Edit account modal with launch args" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">ACCOUNT EDITOR</span>
+          <p class="thumb-desc">Edit credentials, custom launch args, and an optional GW2 API key. Each account stays self-contained.</p>
+        </div>
+      </button>
+      <button class="thumb" data-full="assets/screenshots/live-stats.png" aria-label="Live stats with a running account, full size">
+        <img src="assets/screenshots/live-stats.png" alt="Account vault with one account actively running" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">LIVE STATUS</span>
+          <p class="thumb-desc">Running, launching, stopping — every card shows live state. Pop the launcher open mid-session and you can tell at a glance which client is where.</p>
+        </div>
+      </button>
+      <button class="thumb" data-full="assets/screenshots/whats-new.png" aria-label="What's New screen, full size">
+        <img src="assets/screenshots/whats-new.png" alt="What's New screen after update" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">WHAT'S NEW</span>
+          <p class="thumb-desc">After every update, AxiAM shows the release notes in-app — so you never have to hunt down what changed.</p>
+        </div>
+      </button>
+      <button class="thumb" data-full="assets/screenshots/settings.png" aria-label="Settings panel, full size">
+        <img src="assets/screenshots/settings.png" alt="Settings panel with theme and GW2 path" loading="lazy" />
+        <div class="thumb-body">
+          <span class="thumb-caption">SETTINGS</span>
+          <p class="thumb-desc">Point at your <code>Gw2-64.exe</code>, pick a theme, choose your master-password cadence, and you're done.</p>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox-close" id="lightbox-close" aria-label="Close lightbox"><i data-lucide="x"></i></button>
+    <img id="lightbox-img" alt="" />
+  </div>
+
+  <!-- Release modal -->
+  <div class="modal" id="release-modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-header">
+        <div>
+          <div class="modal-eyebrow" id="modal-eyebrow">// RELEASE</div>
+          <h3 class="modal-title" id="modal-title"></h3>
+          <p class="modal-date" id="modal-date"></p>
+        </div>
+        <button class="modal-close" id="modal-close" aria-label="Close release notes"><i data-lucide="x"></i></button>
+      </header>
+      <div class="modal-body" id="modal-body"></div>
+      <footer class="modal-footer">
+        <a class="btn btn-secondary" id="modal-link" target="_blank" rel="noopener"><i data-lucide="github"></i><span>View on GitHub</span></a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 7. // FAQ -->
+  <section class="section" id="faq">
+    <div class="section-rule">
+      <span class="section-rule-label">// FAQ</span>
+    </div>
+
+    <div class="faq">
+      <details>
+        <summary>I forgot my master password. Can I recover my accounts?<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>No. The master password is never stored and cannot be recovered. That's the whole point — there is no back door. You'll need to reset app data and re-add your accounts.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Does AxiAM store my credentials online?<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>No. All credentials are encrypted and stored locally on your machine. Nothing is transmitted to any server. There is no AxiAM server.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can I use AxiAM on Linux?<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>Yes. Point the GW2 path to a wrapper script that launches the game through Proton/Wine. The rest of the app works natively.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>The app says an update is available but nothing happens.<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>Check your internet connection and firewall. Updates are downloaded from GitHub Releases. If it persists, grab the latest installer manually from the releases page.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Why does Windows SmartScreen warn me about the installer?<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>Unsigned builds trigger SmartScreen warnings. Official releases are code-signed to avoid this. If you built from source without a signing certificate, this is expected.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Is it free?<span class="faq-indicator" aria-hidden="true"><i data-lucide="plus"></i></span></summary>
+        <div class="faq-body">
+          <p>Yes. MIT licensed, free forever. No paid tier.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 8. // CHANGELOG -->
+  <section class="section" id="changelog">
+    <div class="section-rule">
+      <span class="section-rule-label">// CHANGELOG</span>
+    </div>
+
+    <div class="changelog" id="changelog-list">
+      <p class="muted">Loading recent releases…</p>
+    </div>
+    <div class="changelog-footer">
+      <a class="btn btn-secondary" href="https://github.com/darkharasho/axiam/releases" target="_blank" rel="noopener"><span>View all releases</span><i data-lucide="arrow-right"></i></a>
+    </div>
+  </section>
+
+</main>
+
+<!-- 9. FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4 class="footer-heading">PROJECT</h4>
+        <ul>
+          <li><a href="https://github.com/darkharasho/axiam" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/darkharasho/axiam/releases" target="_blank" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/darkharasho/axiam/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4 class="footer-heading">COMMUNITY</h4>
+        <ul>
+          <li><a href="https://discord.gg/UjzMXMGXEg" target="_blank" rel="noopener">Discord</a></li>
+          <li><a href="https://github.com/darkharasho/axiam/issues" target="_blank" rel="noopener">Issues</a></li>
+          <li><a href="https://github.com/darkharasho/axiam/discussions" target="_blank" rel="noopener">Discussions</a></li>
+        </ul>
+      </div>
+      <div class="footer-col footer-col--about">
+        <h4 class="footer-heading">ABOUT</h4>
+        <p class="footer-muted">Credentials are encrypted on disk with AES-256-GCM. AxiAM has no server, no telemetry, and no cloud sync. Updates ship from GitHub Releases.</p>
+        <p class="footer-muted">Master password is never stored. If you forget it, there is no recovery — that is the design.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      © 2026 harasho · Not affiliated with ArenaNet · Guild Wars 2 © ArenaNet, LLC.
+    </div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
