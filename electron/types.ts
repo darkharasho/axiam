@@ -23,7 +23,6 @@ export interface AppSettings {
     themeId: string;
     allowMultiInstance?: boolean;
     junctionMultiInstance?: boolean;
-    dllRedirectMultiInstance?: boolean;
 }
 
 export type IpcEvents = {

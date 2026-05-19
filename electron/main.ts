@@ -1217,7 +1217,7 @@ app.on('ready', () => {
   if (process.platform === 'win32') {
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     const appData = process.env.APPDATA;
-    if (settings.dllRedirectMultiInstance) {
+    if (settings.allowMultiInstance) {
       if (!appData) {
         logMainWarn('startup', '[dll-redirect] APPDATA env var missing; cannot un-migrate junction');
       } else {
@@ -1287,11 +1287,12 @@ app.on('ready', () => {
       launchStateMachine.setState(accountId, 'stopped', 'verified', 'Process exited');
     }
 
-    // DLL-redirect mode: GW2's every Local.dat open was rewritten to the
-    // per-account file in-process, so the host file never held this
-    // account's data. Nothing to copy back.
+    // DLL-redirect mode (implicit under allowMultiInstance on Windows):
+    // GW2's every Local.dat open was rewritten to the per-account file
+    // in-process, so the host file never held this account's data.
+    // Nothing to copy back.
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
-    if (settings.dllRedirectMultiInstance) {
+    if (process.platform === 'win32' && settings.allowMultiInstance) {
       logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
       return;
     }
@@ -1755,13 +1756,15 @@ async function doLaunch(id: string): Promise<boolean> {
     return false;
   }
 
-  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean; dllRedirectMultiInstance?: boolean } | undefined) || {};
+  const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
-  // DLL redirect takes precedence when both flags are on: it's the
-  // current best multi-instance strategy, and running junction at the
-  // same time would point the host appdata at a per-account dir for no
-  // benefit.
-  const useDllRedirect = process.platform === 'win32' && launchSettings.dllRedirectMultiInstance === true;
+  // Multi-instance implies per-account DLL redirect on Windows. The
+  // DLL redirect is the only strategy that actually delivers
+  // concurrent multi-launch — take-2 and take-3 both fail with
+  // "Download failed (5)" on the second client — so tying the two
+  // together removes a foot-gun: no way to enable multi-instance and
+  // unwittingly stay on the broken path.
+  const useDllRedirect = process.platform === 'win32' && launchSettings.allowMultiInstance === true;
   const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true && !useDllRedirect;
 
   if (gw2Path && !fs.existsSync(gw2Path)) {

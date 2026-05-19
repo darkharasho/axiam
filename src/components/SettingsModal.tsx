@@ -14,7 +14,6 @@ type SettingsPayload = {
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
     allowMultiInstance: boolean;
-    dllRedirectMultiInstance: boolean;
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 350;
@@ -30,7 +29,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const [themeId, setThemeId] = useState('blood_legion');
     const [allowMultiInstance, setAllowMultiInstance] = useState<boolean>(false);
     const [showMultiInstanceConfirm, setShowMultiInstanceConfirm] = useState<boolean>(false);
-    const [dllRedirectMultiInstance, setDllRedirectMultiInstance] = useState<boolean>(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
     const [isHydrated, setIsHydrated] = useState(false);
     const saveTimerRef = useRef<number | null>(null);
@@ -61,7 +59,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         masterPasswordPrompt,
         themeId,
         allowMultiInstance,
-        dllRedirectMultiInstance,
     });
 
     const commitSave = async (payload: SettingsPayload, snapshot: string): Promise<void> => {
@@ -105,13 +102,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 masterPasswordPrompt: settings?.masterPasswordPrompt ?? 'every_time',
                 themeId: settings?.themeId || 'blood_legion',
                 allowMultiInstance: settings?.allowMultiInstance ?? false,
-                dllRedirectMultiInstance: settings?.dllRedirectMultiInstance ?? false,
             };
             setGw2Path(normalized.gw2Path);
             setMasterPasswordPrompt(normalized.masterPasswordPrompt);
             setThemeId(normalized.themeId);
             setAllowMultiInstance(normalized.allowMultiInstance);
-            setDllRedirectMultiInstance(normalized.dllRedirectMultiInstance);
             const snapshot = JSON.stringify(normalized);
             lastSavedSnapshotRef.current = snapshot;
             pendingSaveRef.current = null;
@@ -147,7 +142,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         masterPasswordPrompt,
         themeId,
         allowMultiInstance,
-        dllRedirectMultiInstance,
     ]);
 
     const handleAutoLocateGw2Path = async () => {
@@ -355,41 +349,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                         setShowMultiInstanceConfirm(true);
                                     } else {
                                         setAllowMultiInstance(false);
-                                        // Auto-off the dependent flag too: per-account
-                                        // credentials only matter when multi-instance is on.
-                                        setDllRedirectMultiInstance(false);
                                     }
                                 }}
                             />
                             <div>
                                 <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
                                 <div className="text-xs text-[var(--theme-text-dim)] mt-1">
-                                    Lets AxiAM launch more than one Guild Wars 2 client at a time by closing the
-                                    game's single-instance lock. Multi-boxing is tolerated by ArenaNet but not
-                                    officially supported — use at your own risk.
+                                    Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
+                                    own credentials. Multi-boxing is tolerated by ArenaNet but not officially
+                                    supported — use at your own risk. First launch of a new account will pre-fill
+                                    another account's email; log in once with the correct account and it'll save
+                                    per-account from then on.
                                 </div>
                             </div>
                         </label>
-                        {allowMultiInstance && (
-                            <label className="flex items-start gap-3 cursor-pointer mt-3 pl-6">
-                                <input
-                                    type="checkbox"
-                                    className="mt-1"
-                                    checked={dllRedirectMultiInstance}
-                                    onChange={(e) => setDllRedirectMultiInstance(e.target.checked)}
-                                />
-                                <div>
-                                    <div className="text-sm text-[var(--theme-text)]">Per-account credentials (DLL redirect)</div>
-                                    <div className="text-xs text-[var(--theme-text-dim)] mt-1">
-                                        Injects a small library into each Gw2-64.exe that redirects credential
-                                        reads/writes to a per-account file. Lets concurrent clients each remember
-                                        their own login. Same technique Gw2Launcher has used for years. The first
-                                        launch of each new account will pre-fill another account's email — log
-                                        in once with the correct account and it saves per-profile from then on.
-                                    </div>
-                                </div>
-                            </label>
-                        )}
                     </div>
 
                     {/* Footer */}
