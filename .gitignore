@@ -32,3 +32,4 @@ Thumbs.db
 .vscode/
 tools/mutex-closer/target/
 tools/local-dat-redirect/target/
+tools/injector/target/
