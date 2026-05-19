@@ -14,7 +14,7 @@ import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath, seedAccountLocalDatFromHost } from './localDat.js';
 import { injectDll } from './dllInjector.js';
-import { migrateGw2DirToJunction, repointJunction } from './junction.js';
+import { migrateGw2DirToJunction, repointJunction, unmigrateJunctionToRealDir } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
 import { quitWatcher } from './quitWatcher.js';
 import {
@@ -1208,10 +1208,40 @@ app.on('ready', () => {
   // Junction migration (Windows + opt-in flag). Idempotent: subsequent runs
   // detect the existing junction and no-op. Refuses to migrate while GW2 is
   // running so we don't yank a directory out from under live file handles.
+  //
+  // The DLL-redirect flag takes precedence: if it's on we un-migrate the
+  // junction (or no-op if there isn't one) so the host appdata path is a
+  // real directory again. The DLL-redirect strategy needs a shared real
+  // directory at hostPath because the launcher's update check coordinates
+  // across all instances through it.
   if (process.platform === 'win32') {
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
-    if (settings.junctionMultiInstance) {
-      const appData = process.env.APPDATA;
+    const appData = process.env.APPDATA;
+    if (settings.dllRedirectMultiInstance) {
+      if (!appData) {
+        logMainWarn('startup', '[dll-redirect] APPDATA env var missing; cannot un-migrate junction');
+      } else {
+        const hostPath = path.join(appData, 'Guild Wars 2');
+        const defaultProfileDir = path.join(
+          app.getPath('userData'),
+          'default-gw2-state',
+          'Guild Wars 2',
+        );
+        try {
+          const result = unmigrateJunctionToRealDir({
+            hostPath,
+            defaultProfileDir,
+            isGw2Running: () => getAllRunningGw2Pids().length > 0,
+          });
+          logMain('startup', `[dll-redirect] un-junction: ${result.status} (${result.movedFiles} files)`);
+          if (result.status === 'refused-gw2-running' && mainWindow) {
+            mainWindow.webContents.send('junction-migration-deferred');
+          }
+        } catch (err: any) {
+          logMainError('startup', `[dll-redirect] un-junction failed: ${err?.message ?? err}`);
+        }
+      }
+    } else if (settings.junctionMultiInstance) {
       if (!appData) {
         logMainWarn('startup', '[junction] APPDATA env var missing; cannot migrate');
       } else {

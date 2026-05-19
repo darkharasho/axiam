@@ -86,6 +86,71 @@ export interface MigrationResult {
   movedFiles: number;
 }
 
+export interface UnmigrationResult {
+  status: 'already-un-migrated' | 'unmigrated' | 'refused-gw2-running';
+  movedFiles: number;
+}
+
+/**
+ * Reverse of `migrateGw2DirToJunction`: if `hostPath` is currently a
+ * junction (set up by an earlier take-3 / junctionMultiInstance run),
+ * remove it and recreate `hostPath` as a real directory holding the
+ * default profile's contents.
+ *
+ * This is the on-startup migration that runs when the user has flipped
+ * to `dllRedirectMultiInstance`. The DLL-redirect strategy needs
+ * `hostPath` to be a regular directory: the launcher's update check
+ * uses the directory shared across all instances, and per-process
+ * isolation happens via the injected NtCreateFile rewrite, not via
+ * path-level redirection.
+ *
+ * Refuses to run while GW2 is alive (the launcher could be holding
+ * file handles into the junction target). The caller is expected to
+ * surface that and ask the user to close GW2.
+ *
+ * `defaultProfileDir` is where the original appdata contents were
+ * stashed during the forward migration. If it exists and has files,
+ * those are moved back to `hostPath`. If it's empty or missing, the
+ * un-migration just leaves an empty `hostPath` — the launcher will
+ * rebuild its own state.
+ */
+export function unmigrateJunctionToRealDir(args: {
+  hostPath: string;
+  defaultProfileDir: string;
+  isGw2Running: () => boolean;
+  filesystem?: JunctionFs;
+}): UnmigrationResult {
+  const fsx = args.filesystem ?? defaultFs;
+
+  if (!isJunction(args.hostPath, fsx)) {
+    return { status: 'already-un-migrated', movedFiles: 0 };
+  }
+
+  if (args.isGw2Running()) {
+    return { status: 'refused-gw2-running', movedFiles: 0 };
+  }
+
+  // recursive: false so rmSync only removes the junction entry itself,
+  // not the directory it points at. The default-profile-dir contents
+  // stay intact for the move-back step below.
+  fsx.rmSync(args.hostPath, { force: true, recursive: false });
+  fsx.mkdirSync(args.hostPath, { recursive: true });
+
+  let movedFiles = 0;
+  if (fsx.existsSync(args.defaultProfileDir)) {
+    const entries = fsx.readdirSync(args.defaultProfileDir);
+    for (const entry of entries) {
+      fsx.renameSync(
+        path.join(args.defaultProfileDir, entry),
+        path.join(args.hostPath, entry),
+      );
+      movedFiles += 1;
+    }
+  }
+
+  return { status: 'unmigrated', movedFiles };
+}
+
 /**
  * One-time migration: if the real `%APPDATA%\Guild Wars 2` directory exists,
  * move its contents into `defaultProfileDir` and replace the original path
