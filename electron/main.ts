@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
-import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath } from './localDat.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath, seedAccountLocalDatFromHost } from './localDat.js';
 import { injectDll } from './dllInjector.js';
 import { migrateGw2DirToJunction, repointJunction } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
@@ -1246,6 +1246,17 @@ app.on('ready', () => {
     const ctx = launchContexts.get(accountId);
     launchContexts.delete(accountId);
 
+    // Reset the state machine ONLY if the current phase reflects a
+    // run that already reached the running state. Without this the UI
+    // keeps showing the running / errored phase from the prior launch
+    // until the user clicks Launch again — confusing when diagnosing
+    // failures. Guard against clobbering a freshly-queued relaunch by
+    // not overwriting launch_requested / launcher_started.
+    const currentPhase = launchStateMachine.getState(accountId)?.phase;
+    if (currentPhase === 'running' || currentPhase === 'process_detected' || currentPhase === 'errored') {
+      launchStateMachine.setState(accountId, 'stopped', 'verified', 'Process exited');
+    }
+
     // DLL-redirect mode: GW2's every Local.dat open was rewritten to the
     // per-account file in-process, so the host file never held this
     // account's data. Nothing to copy back.
@@ -1795,10 +1806,19 @@ async function doLaunch(id: string): Promise<boolean> {
     if (!fs.existsSync(profileDir)) {
       fs.mkdirSync(profileDir, { recursive: true });
     }
-    if (useAutologin) {
-      logMain('launch', `[dll-redirect] account=${id} per-process Local.dat redirect armed; -autologin will read from profile`);
+    // Seed the per-account Local.dat from the host file if this account
+    // is new. Local.dat carries ~70MB of patcher cache in addition to
+    // credentials — without that cache the launcher refuses to progress.
+    const seedResult = seedAccountLocalDatFromHost(account.id);
+    if (seedResult.ok) {
+      // hasLocalDat() was evaluated above against the snapshot path; if
+      // we just seeded a copy of the host file the redirect target now
+      // contains creds (possibly another account's, but valid). -autologin
+      // will pre-fill those; the user re-logs once and they get overwritten.
+      useAutologin = true;
+      logMain('launch', `[dll-redirect] account=${id} seeded profile Local.dat from host; redirect armed`);
     } else {
-      logMain('launch', `[dll-redirect] account=${id} per-process redirect armed; first login will create Local.dat in profile`);
+      logMainWarn('launch', `[dll-redirect] account=${id} seed skipped (${seedResult.reason}); launcher may need to rebuild its cache`);
     }
   } else if (useJunction) {
     const appData = process.env.APPDATA;

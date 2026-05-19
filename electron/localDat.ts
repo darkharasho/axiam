@@ -152,6 +152,47 @@ export function snapshotHostToAccount(
 }
 
 /**
+ * Seed the per-account Local.dat from the host file IFF the per-account
+ * file does not yet exist. Used by the DLL-redirect path so a fresh
+ * account's profile starts with a valid patcher cache copied from the
+ * host — Local.dat is not just credentials, it's also ~70MB of
+ * launcher / patcher state, and an empty file makes the launcher refuse
+ * to progress past its update check.
+ *
+ * Whatever credentials the host file held will appear pre-filled on the
+ * first launch of this account. They get overwritten the first time the
+ * user logs in as this account and ticks Remember Account Information.
+ *
+ * Idempotent: if the per-account file already exists, this is a no-op
+ * that returns `{ ok: true }`. If the host file is missing too, returns
+ * `{ ok: false, reason: 'no-host-file' }` and the caller can choose to
+ * launch GW2 anyway (the launcher will just have to rebuild its cache).
+ */
+export function seedAccountLocalDatFromHost(
+  accountId: string,
+  filesystem: CopyFs = fs,
+): CopyResult {
+  const dest = getAccountLocalDatPath(accountId);
+  if (filesystem.existsSync(dest)) {
+    return { ok: true };
+  }
+  const src = getHostLocalDatPath();
+  if (!filesystem.existsSync(src)) {
+    return { ok: false, reason: 'no-host-file' };
+  }
+  const destDir = path.dirname(dest);
+  try {
+    if (!filesystem.existsSync(destDir)) {
+      filesystem.mkdirSync(destDir, { recursive: true });
+    }
+    filesystem.copyFileSync(src, dest);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
+  }
+}
+
+/**
  * Filesystem facade for migration tests. Real callers pass node:fs directly.
  */
 export interface MigrationFs {
