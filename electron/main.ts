@@ -742,7 +742,7 @@ async function runPatcherIfNeeded(id: string, installDir: string): Promise<boole
   // vanilla spawn — never an unrelated instance that predated it.
   for (const pid of getAllRunningGw2Pids()) {
     if (!preLaunchPids.has(pid)) {
-      terminatePid(pid);
+      terminatePidTree(pid);
     }
   }
   // Give the OS a moment to release the GW2 mutex before the next launch.
@@ -2054,6 +2054,15 @@ async function doLaunch(id: string): Promise<boolean> {
         logMainWarn('launch', `[patch] account=${id} patch check failed: ${err?.message ?? err}; continuing to launch`);
       }
     }
+  }
+
+  // If the user clicked Stop while we were patching, abort before spawning
+  // the real -autologin instance — the patch step already tore down the
+  // vanilla launcher.
+  const postPatchState = launchStateMachine.getState(id);
+  if (postPatchState && (postPatchState.phase === 'stopping' || postPatchState.phase === 'stopped')) {
+    logMain('launch', `[patch] account=${id} launch aborted: Stop requested during patching`);
+    return false;
   }
 
   // Always pass -shareArchive so concurrent instances can both open the
