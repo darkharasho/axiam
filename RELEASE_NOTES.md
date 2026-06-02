@@ -1,7 +1,9 @@
 # Release Notes
 
-Version v1.1.13 — May 17, 2026
+Version v1.2.1 — June 2, 2026
 
-## Fixes
+## No more "needs to be patched first" crash after updates
 
-- Multi-instance launches no longer get stuck silently. When account A is already running with its saved login restored, GW2 holds `Local.dat` open exclusively — and trying to install account B's `Local.dat` over it would fail with a filesystem error that aborted the launch handler with no log output past the mutex-close step. The launcher now tolerates the locked file, logs a clear warning, and proceeds to launch the second account without `-autologin` (you'll log in manually for the second client). Bound to be the most common cause of "the second launch silently does nothing" reports.
+When Guild Wars 2 got a Steam update, launching an account would sometimes crash on startup with a "Client needs to be patched first" error. That happened because auto-login skips the GW2 launcher's patcher, so the game tried to start with out-of-date files.
+
+Now the launcher notices when your `Gw2.dat` is stale and quietly runs the game's patcher once before logging you in — you'll see a brief "patching" state, then it launches normally. If you hit Stop while it's patching, it cleanly bails out instead of launching anyway.
