@@ -26,7 +26,7 @@ interface Api {
     stopGw2Process: () => Promise<boolean>;
     getLaunchStates: () => Promise<Array<{
         accountId: string;
-        phase: 'idle' | 'launch_requested' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
+        phase: 'idle' | 'launch_requested' | 'patching' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
         certainty: 'verified' | 'inferred';
         updatedAt: number;
         note?: string;
