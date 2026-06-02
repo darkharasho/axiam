@@ -16,6 +16,14 @@ import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDa
 import { injectDll } from './dllInjector.js';
 import { migrateGw2DirToJunction, repointJunction, unmigrateJunctionToRealDir } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
+import {
+  gw2DatPath,
+  gw2ExePath,
+  isPatchNeeded,
+  createStabilityState,
+  stepStability,
+  type StabilityConfig,
+} from './patchDetector.js';
 import { quitWatcher } from './quitWatcher.js';
 import {
   getHelperPath,
@@ -606,6 +614,141 @@ function launchViaSteam(args: string[]): void {
     stdio: 'ignore',
   });
   child.unref();
+}
+
+const PATCH_STABILITY_CONFIG: StabilityConfig = {
+  quietWindowMs: 10_000,
+  graceWindowMs: 20_000,
+  ceilingMs: 300_000,
+};
+const PATCH_POLL_INTERVAL_MS = 2_000;
+const PATCH_TEARDOWN_SETTLE_MS = 2_000;
+
+/**
+ * Resolve the GW2 install directory for patch detection. Prefers an explicit
+ * Gw2-64.exe path (the direct-launch path on Windows); otherwise falls back to
+ * auto-location (covers Linux/Steam). Returns null when nothing is found, in
+ * which case the caller skips patch detection entirely.
+ */
+function resolveGw2InstallDir(gw2Path?: string): string | null {
+  if (gw2Path && fs.existsSync(gw2Path)) {
+    return path.dirname(gw2Path);
+  }
+  const located = autoLocateGw2ExecutablePath();
+  if (located.found && located.path && fs.existsSync(located.path)) {
+    return path.dirname(located.path);
+  }
+  return null;
+}
+
+/** statSync helper that returns null instead of throwing on a missing file. */
+function safeMtimeMs(filePath: string): number | null {
+  try {
+    return fs.statSync(filePath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/** Sample Gw2.dat size+mtime, or null if it can't be read. */
+function sampleGw2Dat(datPath: string): { size: number; mtimeMs: number } | null {
+  try {
+    const st = fs.statSync(datPath);
+    return { size: st.size, mtimeMs: st.mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Launch GW2 vanilla (no -autologin, no -mumble) for a one-off patcher run.
+ * Mirrors the real launch path: Linux always goes through Steam/Proton; on
+ * Windows/other we spawn the located Gw2-64.exe directly when it exists so a
+ * non-Steam install patches correctly, falling back to Steam otherwise.
+ */
+function launchVanillaForPatch(installDir: string): void {
+  const exePath = gw2ExePath(installDir);
+  if (process.platform !== 'linux' && fs.existsSync(exePath)) {
+    const child = spawn(exePath, ['-shareArchive'], {
+      cwd: installDir,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    });
+    child.on('error', (spawnError) => {
+      logMainError('launch', `[patch] vanilla direct-exe spawn failed: ${spawnError.message}`);
+    });
+    child.unref();
+    return;
+  }
+  launchViaSteam(['-shareArchive']);
+}
+
+/**
+ * After a game update, -autologin crashes with "Client needs to be patched
+ * first" because it bypasses the launcher's patcher. Detect a stale Gw2.dat
+ * (exe newer than dat) and, if found, run GW2 once WITHOUT -autologin so the
+ * launcher patches Gw2.dat, wait for the dat to stabilize, then kill that
+ * vanilla instance so the real -autologin launch can proceed cleanly.
+ *
+ * Returns true if a patch run was performed, false if no patch was needed.
+ */
+async function runPatcherIfNeeded(id: string, installDir: string): Promise<boolean> {
+  const exeMtime = safeMtimeMs(gw2ExePath(installDir));
+  const datMtime = safeMtimeMs(gw2DatPath(installDir));
+  if (!isPatchNeeded(exeMtime, datMtime)) {
+    return false;
+  }
+
+  logMain('launch', `[patch] account=${id} Gw2.dat looks stale (exe newer than dat); running patcher`);
+  launchStateMachine.setState(id, 'patching', 'inferred', 'Patching GW2 after update…');
+
+  // Vanilla launch: no -autologin, no -mumble. -shareArchive is safe and lets
+  // the patcher run alongside any other instance.
+  const datPath = gw2DatPath(installDir);
+  const preLaunchPids = new Set(getAllRunningGw2Pids());
+  launchVanillaForPatch(installDir);
+
+  // Poll Gw2.dat to stability using the tested stepper.
+  let state = createStabilityState(Date.now());
+  const verdict = await new Promise<'done' | 'proceed' | 'timeout'>((resolve) => {
+    const timer = setInterval(() => {
+      // Honor a Stop click during patching.
+      const current = launchStateMachine.getState(id);
+      if (current && (current.phase === 'stopping' || current.phase === 'stopped')) {
+        clearInterval(timer);
+        resolve('proceed');
+        return;
+      }
+      const sample = sampleGw2Dat(datPath);
+      if (sample == null) return; // transient unreadable dat; keep polling
+      const stepped = stepStability(state, sample, Date.now(), PATCH_STABILITY_CONFIG);
+      state = stepped.state;
+      if (stepped.verdict !== 'pending') {
+        clearInterval(timer);
+        resolve(stepped.verdict);
+      }
+    }, PATCH_POLL_INTERVAL_MS);
+  });
+
+  if (verdict === 'timeout') {
+    logMainWarn('launch', `[patch] account=${id} patch timed out after ${PATCH_STABILITY_CONFIG.ceilingMs}ms`);
+  } else {
+    logMain('launch', `[patch] account=${id} patch ${verdict}; tearing down vanilla instance`);
+  }
+
+  // Kill the vanilla instance(s) we spawned so the real -autologin launch
+  // starts from a clean slate. Only terminate pids that appeared after our
+  // vanilla spawn — never an unrelated instance that predated it.
+  for (const pid of getAllRunningGw2Pids()) {
+    if (!preLaunchPids.has(pid)) {
+      terminatePidTree(pid);
+    }
+  }
+  // Give the OS a moment to release the GW2 mutex before the next launch.
+  await new Promise((resolve) => setTimeout(resolve, PATCH_TEARDOWN_SETTLE_MS));
+
+  return true;
 }
 
 function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
@@ -1897,6 +2040,29 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
+  }
+
+  // After a game update, -autologin crashes ("Client needs to be patched
+  // first"). If we're about to use -autologin, make sure Gw2.dat is current
+  // first — running the vanilla patcher once if it isn't.
+  if (useAutologin) {
+    const installDir = resolveGw2InstallDir(gw2Path);
+    if (installDir) {
+      try {
+        await runPatcherIfNeeded(id, installDir);
+      } catch (err: any) {
+        logMainWarn('launch', `[patch] account=${id} patch check failed: ${err?.message ?? err}; continuing to launch`);
+      }
+    }
+  }
+
+  // If the user clicked Stop while we were patching, abort before spawning
+  // the real -autologin instance — the patch step already tore down the
+  // vanilla launcher.
+  const postPatchState = launchStateMachine.getState(id);
+  if (postPatchState && (postPatchState.phase === 'stopping' || postPatchState.phase === 'stopped')) {
+    logMain('launch', `[patch] account=${id} launch aborted: Stop requested during patching`);
+    return false;
   }
 
   // Always pass -shareArchive so concurrent instances can both open the

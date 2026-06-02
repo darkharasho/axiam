@@ -16,7 +16,7 @@ import { ContextMenuContainer } from './components/ContextMenu.tsx';
 import Confetti from './components/Confetti.tsx';
 import Tooltip from './components/Tooltip.tsx';
 
-type LaunchPhase = 'idle' | 'launch_requested' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
+type LaunchPhase = 'idle' | 'launch_requested' | 'patching' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
 type LaunchCertainty = 'verified' | 'inferred';
 type LaunchStateInfo = { accountId: string; phase: LaunchPhase; certainty: LaunchCertainty; updatedAt: number; note?: string };
 
@@ -1025,7 +1025,7 @@ function isBirthday(createdAt?: string): boolean {
 }
 
 function mapLaunchPhaseToStatus(phase: LaunchPhase): 'idle' | 'launching' | 'running' | 'stopping' | 'errored' | null {
-    if (phase === 'launch_requested' || phase === 'launcher_started' || phase === 'credentials_waiting' || phase === 'credentials_submitted') {
+    if (phase === 'launch_requested' || phase === 'patching' || phase === 'launcher_started' || phase === 'credentials_waiting' || phase === 'credentials_submitted') {
         return 'launching';
     }
     if (phase === 'process_detected' || phase === 'running') return 'running';
