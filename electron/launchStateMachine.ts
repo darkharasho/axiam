@@ -1,6 +1,7 @@
 export type LaunchPhase =
   | 'idle'
   | 'launch_requested'
+  | 'patching'
   | 'launcher_started'
   | 'credentials_waiting'
   | 'credentials_submitted'
