@@ -1,9 +1,9 @@
 # Release Notes
 
-Version v1.2.1 — June 2, 2026
+Version v1.2.2 — June 5, 2026
 
-## No more "needs to be patched first" crash after updates
+## The "needs to be patched first" crash, actually fixed this time
 
-When Guild Wars 2 got a Steam update, launching an account would sometimes crash on startup with a "Client needs to be patched first" error. That happened because auto-login skips the GW2 launcher's patcher, so the game tried to start with out-of-date files.
+v1.2.1 tried to catch this but didn't really work: it guessed whether GW2 needed patching by looking at file dates, and that guess never fired for the way GW2 actually updates — so the crash kept happening after an update.
 
-Now the launcher notices when your `Gw2.dat` is stale and quietly runs the game's patcher once before logging you in — you'll see a brief "patching" state, then it launches normally. If you hit Stop while it's patching, it cleanly bails out instead of launching anyway.
+Now AxiAM watches the launch instead of guessing. If an account starts and the game crashes right away with a fresh crash report, it quietly runs the patcher and relaunches you once — no manual relaunch needed. A normal exit (you just closed the game) is left alone, and it won't loop if something else is wrong.
