@@ -19,7 +19,10 @@ import * as launchSerializer from './launchSerializer.js';
 import {
   gw2DatPath,
   gw2ExePath,
+  gw2CrashDumpPath,
   isPatchNeeded,
+  isCrashDumpFresh,
+  shouldAttemptPatchRecovery,
   createStabilityState,
   stepStability,
   type StabilityConfig,
@@ -151,6 +154,11 @@ let resolvedWindowsPowerShellPath: string | null = null;
 // during this account's launch window" to the account here so detection still
 // works. Cleared when the pid exits or the user stops the account.
 const manualAccountPidBindings = new Map<string, number>();
+
+// Timestamp of the last explicit user Stop per account. Reactive patch recovery
+// reads this to tell a real crash-exit from a user-initiated stop — the Windows
+// quitWatcher marks both as phase 'stopped', so the phase alone is ambiguous.
+const lastStopRequestMs = new Map<string, number>();
 
 function encryptForStorage(key: Buffer): string {
   if (safeStorage.isEncryptionAvailable()) {
@@ -623,6 +631,11 @@ const PATCH_STABILITY_CONFIG: StabilityConfig = {
 };
 const PATCH_POLL_INTERVAL_MS = 2_000;
 const PATCH_TEARDOWN_SETTLE_MS = 2_000;
+// How long after a successful -autologin launch we watch the bound process for a
+// fast crash-exit. A real session runs for minutes; the "needs to be patched
+// first" crash exits within a few seconds (Crash.dmp ~9s after launch in the
+// field). Beyond this window we assume a healthy session and stop watching.
+const PATCH_RECOVERY_WATCH_WINDOW_MS = 30_000;
 
 /**
  * Resolve the GW2 install directory for patch detection. Prefers an explicit
@@ -701,6 +714,18 @@ async function runPatcherIfNeeded(id: string, installDir: string): Promise<boole
   }
 
   logMain('launch', `[patch] account=${id} Gw2.dat looks stale (exe newer than dat); running patcher`);
+  await runPatcher(id, installDir);
+  return true;
+}
+
+/**
+ * Force a patcher run regardless of the mtime heuristic: launch GW2 vanilla,
+ * wait for Gw2.dat to stabilize, then tear the vanilla instance down. Used both
+ * by the proactive mtime check (runPatcherIfNeeded) and by reactive recovery
+ * after an -autologin launch crashes post-update — where the mtime heuristic
+ * gives no signal because a pending ArenaNet update hasn't touched local files.
+ */
+async function runPatcher(id: string, installDir: string): Promise<void> {
   launchStateMachine.setState(id, 'patching', 'inferred', 'Patching GW2 after update…');
 
   // Vanilla launch: no -autologin, no -mumble. -shareArchive is safe and lets
@@ -747,8 +772,6 @@ async function runPatcherIfNeeded(id: string, installDir: string): Promise<boole
   }
   // Give the OS a moment to release the GW2 mutex before the next launch.
   await new Promise((resolve) => setTimeout(resolve, PATCH_TEARDOWN_SETTLE_MS));
-
-  return true;
 }
 
 function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
@@ -1771,6 +1794,7 @@ ipcMain.handle('stop-account-process', async (_, accountId) => {
     return true;
   }
   quitWatcher.noteStop(accountId);
+  lastStopRequestMs.set(String(accountId), Date.now());
   return stopAccountProcess(accountId);
 });
 
@@ -1880,7 +1904,10 @@ async function installSnapshotToHostWithRetry(
   return lastResult;
 }
 
-async function doLaunch(id: string): Promise<boolean> {
+async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Promise<boolean> {
+  // allowRecovery defaults true; the reactive-recovery relaunch sets it false so
+  // a second crash can't trigger an endless patch/relaunch loop.
+  const allowRecovery = options?.allowRecovery !== false;
   if (isDevShowcase) {
     showcaseActiveAccounts.clear();
     showcaseActiveAccounts.add(String(id));
@@ -2097,6 +2124,10 @@ async function doLaunch(id: string): Promise<boolean> {
     logMain('launch', `[detect] preLaunch snapshot for account=${id}: ${preLaunchGw2Pids.size} existing Gw2 pids`);
   }
 
+  // Stamp the launch so reactive recovery can tell a Crash.dmp written by THIS
+  // launch from a stale one left by a previous run.
+  const launchStartMs = Date.now();
+
   try {
     // On Linux, always launch via Steam so Proton handles the Windows executable
     // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
@@ -2177,6 +2208,13 @@ async function doLaunch(id: string): Promise<boolean> {
       ?? getActiveAccountProcesses().find((p) => p.accountId === id)?.pid;
     if (typeof boundPid === 'number') {
       quitWatcher.noteLaunch(id, boundPid);
+      // Reactive patch-crash recovery: if this -autologin launch crashes fast
+      // (post-update "needs to be patched first"), force a patch and relaunch
+      // once. Fire-and-forget so we don't hold the launch serializer for the
+      // whole watch window.
+      if (allowRecovery && useAutologin) {
+        void monitorPatchCrashAndRecover(id, gw2Path, boundPid, launchStartMs);
+      }
     }
     if (process.platform === 'win32' && !useJunction && !useDllRedirect) {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
@@ -2184,6 +2222,85 @@ async function doLaunch(id: string): Promise<boolean> {
     }
   }
   return launched;
+}
+
+/**
+ * After a successful -autologin launch, watch the bound process for a fast
+ * crash-exit. The mtime heuristic in runPatcherIfNeeded can't predict a pending
+ * ArenaNet update (it doesn't touch local files until the patcher runs), so an
+ * up-to-date-looking install can still crash with "Client needs to be patched
+ * first". When the process exits quickly AND a Crash.dmp dated to this launch
+ * appears, we force a patch and relaunch -autologin exactly once.
+ *
+ * Fire-and-forget: the caller does not await this so the launch serializer is
+ * released promptly; the relaunch re-acquires the serializer itself.
+ */
+async function monitorPatchCrashAndRecover(
+  id: string,
+  gw2Path: string | undefined,
+  boundPid: number,
+  launchStartMs: number,
+): Promise<void> {
+  const installDir = resolveGw2InstallDir(gw2Path);
+  if (!installDir) return;
+  const crashDumpPath = gw2CrashDumpPath(installDir);
+
+  const stoppedByUser = () => (lastStopRequestMs.get(id) ?? 0) >= launchStartMs;
+
+  // Watch the bound pid until it exits or the window elapses. everSeen guards
+  // against a false "exited" if the pid never shows up in the poll universe.
+  const watchDeadlineMs = launchStartMs + PATCH_RECOVERY_WATCH_WINDOW_MS;
+  let everSeen = false;
+  let exited = false;
+  while (Date.now() < watchDeadlineMs) {
+    await new Promise((resolve) => setTimeout(resolve, PATCH_POLL_INTERVAL_MS));
+    if (stoppedByUser()) return; // never recover over an explicit Stop
+    const alive = getAllRunningGw2Pids().includes(boundPid);
+    if (alive) {
+      everSeen = true;
+    } else if (everSeen) {
+      exited = true;
+      break;
+    }
+  }
+  if (!exited) return; // still running past the window → healthy session
+
+  const crashMtime = safeMtimeMs(crashDumpPath);
+  const shouldRecover = shouldAttemptPatchRecovery({
+    usedAutologin: true,
+    processExitedWithinWindow: true,
+    crashDumpFresh: isCrashDumpFresh(crashMtime, launchStartMs),
+    alreadyRecovered: false,
+  });
+  if (!shouldRecover) {
+    logMain('launch', `[patch] account=${id} -autologin process exited with no fresh Crash.dmp; treating as a normal exit (no recovery)`);
+    return;
+  }
+
+  const exitDelayMs = Date.now() - launchStartMs;
+  logMainWarn('launch', `[patch] account=${id} -autologin crashed ~${exitDelayMs}ms after launch with a fresh Crash.dmp; forcing patch + one relaunch`);
+
+  try {
+    await runPatcher(id, installDir);
+  } catch (err: any) {
+    logMainWarn('launch', `[patch] account=${id} forced patch failed: ${err?.message ?? err}; relaunching anyway`);
+  }
+
+  if (stoppedByUser()) {
+    logMain('launch', `[patch] account=${id} recovery aborted: Stop requested during patching`);
+    return;
+  }
+
+  // Relaunch through the serializer, exactly once (allowRecovery: false stops a
+  // second crash from looping).
+  const release = await launchSerializer.acquire();
+  try {
+    if (stoppedByUser()) return;
+    logMain('launch', `[patch] account=${id} relaunching with -autologin after recovery patch`);
+    await doLaunch(id, { allowRecovery: false });
+  } finally {
+    release();
+  }
 }
 
 ipcMain.handle('launch-account', async (_, id) => {

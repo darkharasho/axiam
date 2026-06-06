@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { gw2DatPath, gw2ExePath, isPatchNeeded } from './patchDetector.js';
+import { gw2DatPath, gw2ExePath, gw2CrashDumpPath, isPatchNeeded } from './patchDetector.js';
+import { isCrashDumpFresh, shouldAttemptPatchRecovery } from './patchDetector.js';
 import { createStabilityState, stepStability } from './patchDetector.js';
 import type { StabilityConfig, StabilitySample } from './patchDetector.js';
 
@@ -8,6 +9,51 @@ describe('patchDetector paths', () => {
     const dir = '/games/Guild Wars 2';
     expect(gw2DatPath(dir)).toBe('/games/Guild Wars 2/Gw2.dat');
     expect(gw2ExePath(dir)).toBe('/games/Guild Wars 2/Gw2-64.exe');
+    expect(gw2CrashDumpPath(dir)).toBe('/games/Guild Wars 2/Crash.dmp');
+  });
+});
+
+describe('isCrashDumpFresh', () => {
+  it('is true when a crash dump was written at or after the launch start', () => {
+    expect(isCrashDumpFresh(2000, 1000)).toBe(true);
+    expect(isCrashDumpFresh(1000, 1000)).toBe(true);
+  });
+
+  it('is false for a stale crash dump that predates this launch', () => {
+    expect(isCrashDumpFresh(500, 1000)).toBe(false);
+  });
+
+  it('is false (fail-safe) when there is no crash dump', () => {
+    expect(isCrashDumpFresh(null, 1000)).toBe(false);
+  });
+});
+
+describe('shouldAttemptPatchRecovery', () => {
+  const base = {
+    usedAutologin: true,
+    processExitedWithinWindow: true,
+    crashDumpFresh: true,
+    alreadyRecovered: false,
+  };
+
+  it('recovers when an -autologin launch exits fast with a fresh crash dump', () => {
+    expect(shouldAttemptPatchRecovery(base)).toBe(true);
+  });
+
+  it('does not recover a launch that was not -autologin (no patch-crash possible)', () => {
+    expect(shouldAttemptPatchRecovery({ ...base, usedAutologin: false })).toBe(false);
+  });
+
+  it('does not recover when the process is still alive (healthy session)', () => {
+    expect(shouldAttemptPatchRecovery({ ...base, processExitedWithinWindow: false })).toBe(false);
+  });
+
+  it('does not recover a clean fast exit with no fresh crash dump (user closed the game)', () => {
+    expect(shouldAttemptPatchRecovery({ ...base, crashDumpFresh: false })).toBe(false);
+  });
+
+  it('never recovers twice for the same launch', () => {
+    expect(shouldAttemptPatchRecovery({ ...base, alreadyRecovered: true })).toBe(false);
   });
 });
 

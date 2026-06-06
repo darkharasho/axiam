@@ -10,6 +10,11 @@ export function gw2ExePath(installDir: string): string {
   return path.join(installDir, 'Gw2-64.exe');
 }
 
+/** Absolute path to Crash.dmp, which GW2 writes into its install dir on a crash. */
+export function gw2CrashDumpPath(installDir: string): string {
+  return path.join(installDir, 'Crash.dmp');
+}
+
 /**
  * Gw2.dat is patched by ArenaNet's launcher, not Steam. After a Steam update
  * the exe is refreshed but Gw2.dat is left stale, so exe-newer-than-dat means
@@ -21,6 +26,43 @@ export function gw2ExePath(installDir: string): string {
 export function isPatchNeeded(exeMtimeMs: number | null, datMtimeMs: number | null): boolean {
   if (exeMtimeMs == null || datMtimeMs == null) return false;
   return exeMtimeMs > datMtimeMs;
+}
+
+/**
+ * Reactive patch recovery. The mtime heuristic above can't see a pending
+ * ArenaNet update — an available update doesn't touch any local file until the
+ * patcher actually runs — so an `-autologin` launch can still crash with
+ * "Client needs to be patched first". We detect that *after the fact*: GW2
+ * writes a fresh Crash.dmp into its install dir, so a crash dump stamped at or
+ * after our launch start means this launch crashed (rather than an old dump
+ * left over from a previous run).
+ */
+export function isCrashDumpFresh(crashMtimeMs: number | null, launchStartMs: number): boolean {
+  if (crashMtimeMs == null) return false;
+  return crashMtimeMs >= launchStartMs;
+}
+
+export interface PatchRecoveryInput {
+  /** Only an -autologin launch can hit the "needs to be patched first" crash. */
+  usedAutologin: boolean;
+  /** The bound GW2 process disappeared within the recovery watch window. */
+  processExitedWithinWindow: boolean;
+  /** A Crash.dmp dated at/after this launch appeared (see isCrashDumpFresh). */
+  crashDumpFresh: boolean;
+  /** Guards against relaunch loops — true once we've already recovered this launch. */
+  alreadyRecovered: boolean;
+}
+
+/**
+ * Decide whether a just-exited launch looks like a post-update patch crash that
+ * we should recover from by force-patching and relaunching once. Requires a
+ * fast exit *and* a fresh crash dump together so a user who simply closes the
+ * game quickly is never mistaken for a crash.
+ */
+export function shouldAttemptPatchRecovery(input: PatchRecoveryInput): boolean {
+  if (!input.usedAutologin) return false;
+  if (input.alreadyRecovered) return false;
+  return input.processExitedWithinWindow && input.crashDumpFresh;
 }
 
 export interface StabilitySample {
