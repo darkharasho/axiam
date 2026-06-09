@@ -65,6 +65,19 @@ export function shouldAttemptPatchRecovery(input: PatchRecoveryInput): boolean {
   return input.processExitedWithinWindow && input.crashDumpFresh;
 }
 
+/**
+ * After a forced patch run, an `-autologin` relaunch is only safe when the
+ * patcher genuinely changed Gw2.dat (`done`). Every other verdict means we have
+ * no evidence a patch happened: `proceed` = the dat never changed at all (likely
+ * nothing was pending, or the crash was unrelated — e.g. an addon/Proton crash),
+ * and `timeout` = it changed but never settled. Relaunching `-autologin` in
+ * those cases just reproduces the original crash, which is exactly the field
+ * crash-loop this guards against.
+ */
+export function patchActuallyRan(verdict: StabilityVerdict): boolean {
+  return verdict === 'done';
+}
+
 export interface StabilitySample {
   size: number;
   mtimeMs: number;

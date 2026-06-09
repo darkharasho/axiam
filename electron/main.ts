@@ -23,6 +23,7 @@ import {
   isPatchNeeded,
   isCrashDumpFresh,
   shouldAttemptPatchRecovery,
+  patchActuallyRan,
   createStabilityState,
   stepStability,
   type StabilityConfig,
@@ -725,7 +726,7 @@ async function runPatcherIfNeeded(id: string, installDir: string): Promise<boole
  * after an -autologin launch crashes post-update — where the mtime heuristic
  * gives no signal because a pending ArenaNet update hasn't touched local files.
  */
-async function runPatcher(id: string, installDir: string): Promise<void> {
+async function runPatcher(id: string, installDir: string): Promise<'done' | 'proceed' | 'timeout'> {
   launchStateMachine.setState(id, 'patching', 'inferred', 'Patching GW2 after update…');
 
   // Vanilla launch: no -autologin, no -mumble. -shareArchive is safe and lets
@@ -772,6 +773,7 @@ async function runPatcher(id: string, installDir: string): Promise<void> {
   }
   // Give the OS a moment to release the GW2 mutex before the next launch.
   await new Promise((resolve) => setTimeout(resolve, PATCH_TEARDOWN_SETTLE_MS));
+  return verdict;
 }
 
 function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
@@ -2280,14 +2282,27 @@ async function monitorPatchCrashAndRecover(
   const exitDelayMs = Date.now() - launchStartMs;
   logMainWarn('launch', `[patch] account=${id} -autologin crashed ~${exitDelayMs}ms after launch with a fresh Crash.dmp; forcing patch + one relaunch`);
 
+  let patchVerdict: 'done' | 'proceed' | 'timeout' = 'proceed';
   try {
-    await runPatcher(id, installDir);
+    patchVerdict = await runPatcher(id, installDir);
   } catch (err: any) {
-    logMainWarn('launch', `[patch] account=${id} forced patch failed: ${err?.message ?? err}; relaunching anyway`);
+    logMainWarn('launch', `[patch] account=${id} forced patch failed: ${err?.message ?? err}`);
   }
 
   if (stoppedByUser()) {
     logMain('launch', `[patch] account=${id} recovery aborted: Stop requested during patching`);
+    return;
+  }
+
+  // Only relaunch -autologin if the patcher actually changed Gw2.dat. A
+  // 'proceed' verdict means the dat never changed — nothing was patched (likely
+  // no update was pending and the crash was unrelated, e.g. an addon/Proton
+  // crash), and 'timeout' means it never settled. Relaunching -autologin in
+  // those cases just reproduces the original crash. Surface an error instead so
+  // the user knows recovery couldn't help, rather than re-crashing silently.
+  if (!patchActuallyRan(patchVerdict)) {
+    logMainWarn('launch', `[patch] account=${id} forced patch made no change to Gw2.dat (verdict=${patchVerdict}); not relaunching -autologin — the crash was likely not a pending-update crash`);
+    launchStateMachine.setState(id, 'errored', 'inferred', 'GW2 crashed and did not need patching — relaunch skipped to avoid a crash loop');
     return;
   }
 

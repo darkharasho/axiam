@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { gw2DatPath, gw2ExePath, gw2CrashDumpPath, isPatchNeeded } from './patchDetector.js';
-import { isCrashDumpFresh, shouldAttemptPatchRecovery } from './patchDetector.js';
+import { isCrashDumpFresh, shouldAttemptPatchRecovery, patchActuallyRan } from './patchDetector.js';
 import { createStabilityState, stepStability } from './patchDetector.js';
 import type { StabilityConfig, StabilitySample } from './patchDetector.js';
 
@@ -54,6 +54,27 @@ describe('shouldAttemptPatchRecovery', () => {
 
   it('never recovers twice for the same launch', () => {
     expect(shouldAttemptPatchRecovery({ ...base, alreadyRecovered: true })).toBe(false);
+  });
+});
+
+describe('patchActuallyRan', () => {
+  // After a forced patch, relaunching -autologin is only safe if the patcher
+  // genuinely changed Gw2.dat. The field crash-loop came from relaunching on a
+  // 'proceed' verdict (Gw2.dat never changed → nothing was patched → same crash).
+  it('is true only when the dat changed and stabilized (verdict done)', () => {
+    expect(patchActuallyRan('done')).toBe(true);
+  });
+
+  it('is false when nothing ever changed (proceed) — no patch happened', () => {
+    expect(patchActuallyRan('proceed')).toBe(false);
+  });
+
+  it('is false on timeout (patch never settled; relaunch would interrupt or re-crash)', () => {
+    expect(patchActuallyRan('timeout')).toBe(false);
+  });
+
+  it('is false while still pending', () => {
+    expect(patchActuallyRan('pending')).toBe(false);
   });
 });
 
