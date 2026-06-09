@@ -1,9 +1,11 @@
 # Release Notes
 
-Version v1.2.2 — June 5, 2026
+Version v1.2.3 — June 8, 2026
 
-## The "needs to be patched first" crash, actually fixed this time
+## No more relaunching straight back into a crash
 
-v1.2.1 tried to catch this but didn't really work: it guessed whether GW2 needed patching by looking at file dates, and that guess never fired for the way GW2 actually updates — so the crash kept happening after an update.
+The "needs to be patched first" recovery from 1.2.2 had a bad failure mode: after a crash it would run the patcher and relaunch you — even when the patcher didn't actually do anything. On Steam/Linux that meant it often relaunched right back into the same crash.
 
-Now AxiAM watches the launch instead of guessing. If an account starts and the game crashes right away with a fresh crash report, it quietly runs the patcher and relaunches you once — no manual relaunch needed. A normal exit (you just closed the game) is left alone, and it won't loop if something else is wrong.
+Now it only relaunches if the patcher genuinely updated the game. If nothing was actually patched — which usually means the crash wasn't an update problem in the first place (an addon or Proton hiccup, say) — it stops and tells you instead of looping you through the same crash.
+
+NOTE: If your account keeps crashing and this doesn't kick in, the crash probably isn't update-related — check your addons (ArcDPS/Nexus) and the game's `Crash.dmp`.
