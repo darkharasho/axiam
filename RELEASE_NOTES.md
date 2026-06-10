@@ -1,13 +1,11 @@
 # Release Notes
 
-Version v1.2.4 — June 9, 2026
+Version v1.2.5 — June 10, 2026
 
-## Per-account logins now work on Linux/Steam
+## Fixed "Download failed (5)" on Linux launches
 
-If you run AxiAM on Linux through Steam/Proton, your saved logins finally stick. Before, clearing a login and logging back in never re-saved it, and every account dropped you onto the same first character — AxiAM was passing `-autologin` but never actually swapping each account's saved login into the game. Now it loads the right account's login before launch and saves it back when you quit, so each account logs into itself and lands on its own last-played character.
+If you play on Linux through Steam/Proton and every AxiAM launch was stalling on the launcher with "Download failed! Please check your internet connection and try again. (5)" — while launching straight from Steam worked fine — that's fixed.
 
-NOTE: This is Linux/Steam only. Windows is unchanged. The first time you launch an account after updating, log in once so AxiAM can capture that account's login going forward.
+AxiAM was always telling GW2 to share its game archive, which keeps the patcher from applying a pending update. So any time ArenaNet pushed a client update, AxiAM launches couldn't patch and got stuck on that error. Now AxiAM only shares the archive when you're actually launching a second copy alongside a running one, so a normal launch can patch itself like it should.
 
-## Accounts now show "Stopped" on Linux when you quit
-
-Close GW2 on Linux and the account card flips back to Stopped instead of showing Running forever.
+NOTE: If you're still stuck on the old version, launch GW2 once directly through Steam to let it patch, then update AxiAM.
