@@ -1436,10 +1436,18 @@ app.on('ready', () => {
     }
   }
 
-  // Configure and start the quit watcher (Windows only). When a tracked GW2
-  // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
-  // back into the account's profile dir to preserve per-account settings.
-  quitWatcher.configure(() => getAllRunningGw2Pids(), QUIT_WATCHER_POLL_INTERVAL_MS);
+  // Configure and start the quit watcher (all platforms). Polls for ended GW2
+  // sessions: on Windows it tracks bound-PID death; on Linux it polls account
+  // mumble-tag liveness with a grace window for GW2's startup re-exec. When a
+  // session ends with no other GW2 running, we snapshot the host Local.dat back
+  // into the account's profile dir to preserve per-account settings.
+  quitWatcher.configure(
+    () => getAllRunningGw2Pids(),
+    QUIT_WATCHER_POLL_INTERVAL_MS,
+    process.platform === 'win32'
+      ? undefined
+      : () => new Set(getActiveAccountProcesses().map((p) => p.accountId)),
+  );
   quitWatcher.on('quit', (accountId: string) => {
     const ctx = launchContexts.get(accountId);
     launchContexts.delete(accountId);
@@ -1459,6 +1467,8 @@ app.on('ready', () => {
     // GW2's every Local.dat open was rewritten to the per-account file
     // in-process, so the host file never held this account's data.
     // Nothing to copy back.
+    // DLL-redirect only exists on Windows multi-instance; this guard never
+    // matches on Linux, so Linux falls through to the snapshot-back below.
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     if (process.platform === 'win32' && settings.allowMultiInstance) {
       logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
@@ -1899,9 +1909,10 @@ async function installSnapshotToHostWithRetry(
   const start = Date.now();
   let lastResult = installSnapshotToHost(accountId);
   while (!lastResult.ok && Date.now() - start < INSTALL_RETRY_TOTAL_MS) {
-    if (lastResult.reason === 'no-snapshot') return lastResult;
+    if (lastResult.reason === 'no-snapshot' || lastResult.reason === 'host-unavailable') return lastResult;
     await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_INTERVAL_MS));
     lastResult = installSnapshotToHost(accountId);
+    if (lastResult.reason === 'no-snapshot' || lastResult.reason === 'host-unavailable') return lastResult;
   }
   return lastResult;
 }
@@ -2051,7 +2062,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
         useAutologin = false;
       }
     }
-  } else if (useAutologin && process.platform === 'win32') {
+  } else if (useAutologin) {
     const installResult = await installSnapshotToHostWithRetry(account.id);
     if (installResult.ok) {
       logMain('launch', `[install] account=${id} installed snapshot to host path`);
@@ -2059,14 +2070,15 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
       // Shouldn't happen — hasLocalDat returned true. Defensive log.
       logMainWarn('launch', `[install] account=${id} unexpected no-snapshot after hasLocalDat=true`);
       useAutologin = false;
+    } else if (installResult.reason === 'host-unavailable') {
+      // Proton prefix not created yet (GW2 never run through Steam). Launch
+      // vanilla; snapshot-back captures Local.dat after the first login+quit.
+      logMainWarn('launch', `[install] account=${id} compatdata not found; launching without -autologin`);
+      useAutologin = false;
     } else {
       logMainWarn('launch', `[install] account=${id} retry exhausted (${installResult.reason}); launching without -autologin`);
       useAutologin = false;
     }
-  } else if (useAutologin) {
-    // Linux/other platforms: -autologin still gated on hasLocalDat but no host
-    // install happens. The Linux launch goes through Steam/Proton.
-    logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
   }
@@ -2107,15 +2119,14 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
     ...userExtras,
   ];
 
-  // Remember whether install populated the host with this account's data
-  // and when the launch started. The quit handler uses both to decide
-  // whether snapshotting host → profile is safe.
-  if (process.platform === 'win32') {
-    launchContexts.set(id, {
-      installed: useAutologin,
-      startedAtMs: Date.now(),
-    });
-  }
+  // Remember whether the per-account snapshot was installed to the host path
+  // (on Windows the %APPDATA% Local.dat; on Linux the Proton-prefix Local.dat)
+  // and when the launch started. The quit handler uses both to decide whether
+  // snapshotting host → profile is safe.
+  launchContexts.set(id, {
+    installed: useAutologin,
+    startedAtMs: Date.now(),
+  });
 
   // Snapshot existing GW2 pids before launch so we can attribute any new
   // pid to this account when WMI hides the elevated process's command line.

@@ -1,6 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
+import { resolveGw2CompatDataDir } from './protonPaths.js';
+
+export class HostUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HostUnavailableError';
+  }
+}
 
 /**
  * Parse Steam's libraryfolders.vdf to get all Steam library paths.
@@ -66,14 +74,29 @@ export function deleteLocalDat(accountId: string): void {
 
 /**
  * Internal: path to the host's GW2 Local.dat (where the running game reads/writes).
- * Windows-only — Linux callers don't manipulate the host path.
+ * On Windows reads APPDATA; on Linux resolves the path inside the GW2 Proton prefix.
+ * Throws HostUnavailableError when the Proton prefix hasn't been created yet.
  */
 function getHostLocalDatPath(): string {
-  const appData = process.env.APPDATA;
-  if (!appData) {
-    throw new Error('APPDATA env var is not set; cannot resolve host Local.dat path');
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA;
+    if (!appData) {
+      throw new Error('APPDATA env var is not set; cannot resolve host Local.dat path');
+    }
+    return path.join(appData, 'Guild Wars 2', 'Local.dat');
   }
-  return path.join(appData, 'Guild Wars 2', 'Local.dat');
+  if (process.platform === 'linux') {
+    const compatDir = resolveGw2CompatDataDir(getSteamLibraryPaths());
+    if (!compatDir) {
+      throw new HostUnavailableError('no GW2 compatdata found in any Steam library');
+    }
+    return path.join(
+      compatDir,
+      'pfx', 'drive_c', 'users', 'steamuser',
+      'AppData', 'Roaming', 'Guild Wars 2', 'Local.dat',
+    );
+  }
+  throw new HostUnavailableError(`unsupported platform: ${process.platform}`);
 }
 
 export interface CopyResult {
@@ -109,15 +132,16 @@ export function installSnapshotToHost(
   if (!filesystem.existsSync(src)) {
     return { ok: false, reason: 'no-snapshot' };
   }
-  const dest = getHostLocalDatPath();
-  const destDir = path.dirname(dest);
   try {
+    const dest = getHostLocalDatPath();
+    const destDir = path.dirname(dest);
     if (!filesystem.existsSync(destDir)) {
       filesystem.mkdirSync(destDir, { recursive: true });
     }
     filesystem.copyFileSync(src, dest);
     return { ok: true };
   } catch (err: any) {
+    if (err instanceof HostUnavailableError) return { ok: false, reason: 'host-unavailable' };
     return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
   }
 }
@@ -134,19 +158,20 @@ export function snapshotHostToAccount(
   accountId: string,
   filesystem: CopyFs = fs,
 ): CopyResult {
-  const src = getHostLocalDatPath();
-  if (!filesystem.existsSync(src)) {
-    return { ok: false, reason: 'no-host-file' };
-  }
-  const dest = getAccountLocalDatPath(accountId);
-  const destDir = path.dirname(dest);
   try {
+    const src = getHostLocalDatPath();
+    if (!filesystem.existsSync(src)) {
+      return { ok: false, reason: 'no-host-file' };
+    }
+    const dest = getAccountLocalDatPath(accountId);
+    const destDir = path.dirname(dest);
     if (!filesystem.existsSync(destDir)) {
       filesystem.mkdirSync(destDir, { recursive: true });
     }
     filesystem.copyFileSync(src, dest);
     return { ok: true };
   } catch (err: any) {
+    if (err instanceof HostUnavailableError) return { ok: false, reason: 'host-unavailable' };
     return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
   }
 }
@@ -176,18 +201,19 @@ export function seedAccountLocalDatFromHost(
   if (filesystem.existsSync(dest)) {
     return { ok: true };
   }
-  const src = getHostLocalDatPath();
-  if (!filesystem.existsSync(src)) {
-    return { ok: false, reason: 'no-host-file' };
-  }
-  const destDir = path.dirname(dest);
   try {
+    const src = getHostLocalDatPath();
+    if (!filesystem.existsSync(src)) {
+      return { ok: false, reason: 'no-host-file' };
+    }
+    const destDir = path.dirname(dest);
     if (!filesystem.existsSync(destDir)) {
       filesystem.mkdirSync(destDir, { recursive: true });
     }
     filesystem.copyFileSync(src, dest);
     return { ok: true };
   } catch (err: any) {
+    if (err instanceof HostUnavailableError) return { ok: false, reason: 'host-unavailable' };
     return { ok: false, reason: err?.code ?? err?.message ?? String(err) };
   }
 }

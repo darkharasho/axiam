@@ -1,4 +1,4 @@
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 
 vi.mock('electron', () => ({
   app: {
@@ -9,13 +9,25 @@ vi.mock('electron', () => ({
     },
   },
 }));
+
+vi.mock('./protonPaths.js', () => ({
+  STEAM_GW2_APP_ID: '1284210',
+  resolveGw2CompatDataDir: vi.fn(),
+}));
+
 import {
   migrateLegacyLocalDat,
   type MigrationFs,
   type MigrationResult,
 } from './localDat.js';
-import { installSnapshotToHost, snapshotHostToAccount, type CopyFs } from './localDat.js';
+import { installSnapshotToHost, snapshotHostToAccount, HostUnavailableError, type CopyFs } from './localDat.js';
+import { resolveGw2CompatDataDir } from './protonPaths.js';
 import * as path from 'path';
+
+const setPlatform = (p: string) =>
+  Object.defineProperty(process, 'platform', { value: p, configurable: true });
+const __origPlatform = process.platform;
+afterEach(() => { setPlatform(__origPlatform); });
 
 type FsSpy = {
   fs: MigrationFs;
@@ -214,18 +226,21 @@ function fakeCopyFs(initialFiles: string[]): CopyFsSpy {
   return spy;
 }
 
-// `installSnapshotToHost` resolves the host path via APPDATA env. Tests set it
-// before calling and restore it afterward so we don't pollute other tests.
+// `installSnapshotToHost` resolves the host path via APPDATA env on win32.
+// Tests set APPDATA and force win32 platform before calling, restoring both afterward.
 function withAppData<T>(value: string | undefined, fn: () => T): T {
   const previous = process.env.APPDATA;
+  const prevPlatform = process.platform;
   if (value === undefined) {
     delete process.env.APPDATA;
   } else {
     process.env.APPDATA = value;
   }
+  setPlatform('win32');
   try {
     return fn();
   } finally {
+    setPlatform(prevPlatform);
     if (previous === undefined) {
       delete process.env.APPDATA;
     } else {
@@ -311,5 +326,42 @@ describe('snapshotHostToAccount', () => {
     const result = withAppData('/host', () => snapshotHostToAccount('acc-a', spy.fs));
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('EACCES');
+  });
+});
+
+describe('Linux host Local.dat path', () => {
+  it('installs into the Proton prefix path when compatdata exists', () => {
+    setPlatform('linux');
+    (resolveGw2CompatDataDir as any).mockReturnValue('/lib/steamapps/compatdata/1284210');
+    const writes: Array<[string, string]> = [];
+    const fsMock = {
+      existsSync: (p: string) => p.endsWith('profiles/acc/Guild Wars 2/Local.dat') || p.endsWith('Guild Wars 2'),
+      mkdirSync: () => {},
+      copyFileSync: (src: string, dest: string) => writes.push([src, dest]),
+    };
+    const result = installSnapshotToHost('acc', fsMock as any);
+    expect(result.ok).toBe(true);
+    expect(writes[0][1]).toBe(
+      '/lib/steamapps/compatdata/1284210/pfx/drive_c/users/steamuser/AppData/Roaming/Guild Wars 2/Local.dat',
+    );
+  });
+
+  it('returns host-unavailable when no compatdata prefix exists', () => {
+    setPlatform('linux');
+    (resolveGw2CompatDataDir as any).mockReturnValue(null);
+    const fsMock = {
+      existsSync: (p: string) => p.endsWith('profiles/acc/Guild Wars 2/Local.dat'),
+      mkdirSync: () => {},
+      copyFileSync: () => {},
+    };
+    const result = installSnapshotToHost('acc', fsMock as any);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('host-unavailable');
+  });
+});
+
+describe('HostUnavailableError', () => {
+  it('is an Error subclass', () => {
+    expect(new HostUnavailableError('x')).toBeInstanceOf(Error);
   });
 });

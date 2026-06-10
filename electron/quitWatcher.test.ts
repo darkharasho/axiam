@@ -59,11 +59,78 @@ describe('quitWatcher', () => {
     expect(events).toEqual(['acc-a']);
   });
 
-  it('start is a no-op on non-Windows platforms', () => {
-    // We can't easily flip process.platform inside the test, but we CAN verify
-    // that start() doesn't throw or schedule on this host. If the host is
-    // Windows the timer activates; either way no exception thrown.
+  it('start() does not throw and activates the polling timer', () => {
+    // start() now runs on all platforms — the platform-specific branching is
+    // in how main.ts configures the watcher (liveness poller on Linux, PID
+    // poller on Windows). Either way start() must not throw.
     expect(() => quitWatcher.start()).not.toThrow();
     quitWatcher.stop();
+  });
+
+  it('linux: fires quit after the grace window of absent liveness polls', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    let live = new Set(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    quitWatcher.tick();                 // present
+    expect(events).toEqual([]);
+    live = new Set<string>();           // account tag gone
+    quitWatcher.tick();                 // absent 1 (< grace)
+    quitWatcher.tick();                 // absent 2 (< grace)
+    expect(events).toEqual([]);
+    quitWatcher.tick();                 // absent 3 (== grace) -> fire
+    expect(events).toEqual(['acc-a']);
+  });
+
+  it('linux: counter resets when the account reappears mid-grace window', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    let live = new Set(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    quitWatcher.tick();                 // present
+    live = new Set<string>();
+    quitWatcher.tick();                 // absent 1 (re-exec gap)
+    live = new Set(['acc-a']);          // game back under new pid
+    quitWatcher.tick();                 // present -> counter resets
+    live = new Set<string>();
+    quitWatcher.tick();                 // absent 1 again
+    quitWatcher.tick();                 // absent 2
+    expect(events).toEqual([]);         // never reached grace
+  });
+
+  it('linux: liveness mode fires quit only once after the account stays gone', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    const live = new Set<string>(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    quitWatcher.tick();          // present
+    live.delete('acc-a');
+    quitWatcher.tick();          // absent 1
+    quitWatcher.tick();          // absent 2
+    quitWatcher.tick();          // absent 3 -> fire (binding deleted)
+    quitWatcher.tick();          // still gone, but no binding -> no re-fire
+    quitWatcher.tick();
+    expect(events).toEqual(['acc-a']);
+  });
+
+  it('linux: noteStop drops the binding without waiting out the grace window', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    const live = new Set(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+    quitWatcher.tick();
+    quitWatcher.noteStop('acc-a');
+    live.delete('acc-a');
+    quitWatcher.tick();
+    quitWatcher.tick();
+    quitWatcher.tick();
+    expect(events).toEqual([]);
   });
 });
