@@ -2051,7 +2051,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
         useAutologin = false;
       }
     }
-  } else if (useAutologin && process.platform === 'win32') {
+  } else if (useAutologin) {
     const installResult = await installSnapshotToHostWithRetry(account.id);
     if (installResult.ok) {
       logMain('launch', `[install] account=${id} installed snapshot to host path`);
@@ -2059,14 +2059,15 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
       // Shouldn't happen — hasLocalDat returned true. Defensive log.
       logMainWarn('launch', `[install] account=${id} unexpected no-snapshot after hasLocalDat=true`);
       useAutologin = false;
+    } else if (installResult.reason === 'host-unavailable') {
+      // Proton prefix not created yet (GW2 never run through Steam). Launch
+      // vanilla; snapshot-back captures Local.dat after the first login+quit.
+      logMainWarn('launch', `[install] account=${id} compatdata not found; launching without -autologin`);
+      useAutologin = false;
     } else {
       logMainWarn('launch', `[install] account=${id} retry exhausted (${installResult.reason}); launching without -autologin`);
       useAutologin = false;
     }
-  } else if (useAutologin) {
-    // Linux/other platforms: -autologin still gated on hasLocalDat but no host
-    // install happens. The Linux launch goes through Steam/Proton.
-    logMain('launch', `[local-dat] Saved login present for account=${id}, using -autologin`);
   } else {
     logMain('launch', `[local-dat] No saved login for account=${id}, launching without -autologin`);
   }
@@ -2110,12 +2111,10 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
   // Remember whether install populated the host with this account's data
   // and when the launch started. The quit handler uses both to decide
   // whether snapshotting host → profile is safe.
-  if (process.platform === 'win32') {
-    launchContexts.set(id, {
-      installed: useAutologin,
-      startedAtMs: Date.now(),
-    });
-  }
+  launchContexts.set(id, {
+    installed: useAutologin,
+    startedAtMs: Date.now(),
+  });
 
   // Snapshot existing GW2 pids before launch so we can attribute any new
   // pid to this account when WMI hides the elevated process's command line.
