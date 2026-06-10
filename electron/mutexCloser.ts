@@ -1,6 +1,7 @@
 import path from 'path';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
+import { resolveGw2CompatDataDir, STEAM_GW2_APP_ID } from './protonPaths.js';
 
 export interface SpawnResult {
   status: number | null;
@@ -105,7 +106,6 @@ export interface Filesystem {
   readdirSync: (path: string) => string[];
 }
 
-const STEAM_GW2_APP_ID = '1284210';
 
 export function findRunningProtonForGw2(runPs: () => string): string | null {
   const lines = runPs().split('\n');
@@ -153,16 +153,17 @@ export function resolveProtonContext(
     }
   }
 
-  for (const lib of steamLibraryPaths) {
-    const compat = path.join(lib, 'steamapps', 'compatdata', STEAM_GW2_APP_ID);
-    if (!filesystem.existsSync(compat)) continue;
+  const compat = resolveGw2CompatDataDir(steamLibraryPaths, filesystem);
+  if (compat) {
+    const lib = compat.slice(0, compat.indexOf(`${path.sep}steamapps${path.sep}compatdata`));
     const proton = findProtonInLibrary(compat, lib, compatToolsRoots, filesystem);
-    if (!proton) continue;
-    return {
-      compatDataPath: compat,
-      protonPath: proton,
-      clientInstallPath: path.join(home, '.local', 'share', 'Steam'),
-    };
+    if (proton) {
+      return {
+        compatDataPath: compat,
+        protonPath: proton,
+        clientInstallPath: path.join(home, '.local', 'share', 'Steam'),
+      };
+    }
   }
   return null;
 }
