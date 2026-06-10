@@ -1899,9 +1899,10 @@ async function installSnapshotToHostWithRetry(
   const start = Date.now();
   let lastResult = installSnapshotToHost(accountId);
   while (!lastResult.ok && Date.now() - start < INSTALL_RETRY_TOTAL_MS) {
-    if (lastResult.reason === 'no-snapshot') return lastResult;
+    if (lastResult.reason === 'no-snapshot' || lastResult.reason === 'host-unavailable') return lastResult;
     await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_INTERVAL_MS));
     lastResult = installSnapshotToHost(accountId);
+    if (lastResult.reason === 'no-snapshot' || lastResult.reason === 'host-unavailable') return lastResult;
   }
   return lastResult;
 }
@@ -2108,9 +2109,10 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
     ...userExtras,
   ];
 
-  // Remember whether install populated the host with this account's data
-  // and when the launch started. The quit handler uses both to decide
-  // whether snapshotting host → profile is safe.
+  // Remember whether the per-account snapshot was installed to the host path
+  // (on Windows the %APPDATA% Local.dat; on Linux the Proton-prefix Local.dat)
+  // and when the launch started. The quit handler uses both to decide whether
+  // snapshotting host → profile is safe.
   launchContexts.set(id, {
     installed: useAutologin,
     startedAtMs: Date.now(),
