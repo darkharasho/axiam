@@ -1,11 +1,13 @@
 # Release Notes
 
-Version v1.2.3 — June 8, 2026
+Version v1.2.4 — June 9, 2026
 
-## No more relaunching straight back into a crash
+## Per-account logins now work on Linux/Steam
 
-The "needs to be patched first" recovery from 1.2.2 had a bad failure mode: after a crash it would run the patcher and relaunch you — even when the patcher didn't actually do anything. On Steam/Linux that meant it often relaunched right back into the same crash.
+If you run AxiAM on Linux through Steam/Proton, your saved logins finally stick. Before, clearing a login and logging back in never re-saved it, and every account dropped you onto the same first character — AxiAM was passing `-autologin` but never actually swapping each account's saved login into the game. Now it loads the right account's login before launch and saves it back when you quit, so each account logs into itself and lands on its own last-played character.
 
-Now it only relaunches if the patcher genuinely updated the game. If nothing was actually patched — which usually means the crash wasn't an update problem in the first place (an addon or Proton hiccup, say) — it stops and tells you instead of looping you through the same crash.
+NOTE: This is Linux/Steam only. Windows is unchanged. The first time you launch an account after updating, log in once so AxiAM can capture that account's login going forward.
 
-NOTE: If your account keeps crashing and this doesn't kick in, the crash probably isn't update-related — check your addons (ArcDPS/Nexus) and the game's `Crash.dmp`.
+## Accounts now show "Stopped" on Linux when you quit
+
+Close GW2 on Linux and the account card flips back to Stopped instead of showing Running forever.
