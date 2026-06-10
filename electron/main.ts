@@ -1439,7 +1439,13 @@ app.on('ready', () => {
   // Configure and start the quit watcher (Windows only). When a tracked GW2
   // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
   // back into the account's profile dir to preserve per-account settings.
-  quitWatcher.configure(() => getAllRunningGw2Pids(), QUIT_WATCHER_POLL_INTERVAL_MS);
+  quitWatcher.configure(
+    () => getAllRunningGw2Pids(),
+    QUIT_WATCHER_POLL_INTERVAL_MS,
+    process.platform === 'win32'
+      ? undefined
+      : () => new Set(getActiveAccountProcesses().map((p) => p.accountId)),
+  );
   quitWatcher.on('quit', (accountId: string) => {
     const ctx = launchContexts.get(accountId);
     launchContexts.delete(accountId);
@@ -1459,6 +1465,8 @@ app.on('ready', () => {
     // GW2's every Local.dat open was rewritten to the per-account file
     // in-process, so the host file never held this account's data.
     // Nothing to copy back.
+    // DLL-redirect only exists on Windows multi-instance; this guard never
+    // matches on Linux, so Linux falls through to the snapshot-back below.
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     if (process.platform === 'win32' && settings.allowMultiInstance) {
       logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
