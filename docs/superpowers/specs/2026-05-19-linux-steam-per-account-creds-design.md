@@ -1,8 +1,15 @@
 # Linux/Steam per-account credentials — design
 
 **Status:** approved, ready for implementation plan
-**Date:** 2026-05-19
+**Date:** 2026-05-19 (revised 2026-06-09)
 **Scope:** Phase 1 of a phased Linux port of AxiAM's multi-account credential flow. Phase 2 (concurrent multi-instance) is sketched at the end but not specified.
+
+> **2026-06-09 revision.** The original draft assumed Linux quit detection already
+> worked (old E7, "quitWatcher.ts unchanged"). It does not: `quitWatcher.start()`
+> returns early on non-win32, so the `quit` handler that performs snapshot-back
+> **never fires on Linux** — which is why per-account logins are never saved. This
+> revision adds a real Linux quit trigger (see "Snapshot-back trigger"). The install
+> half of the design is unchanged.
 
 ## Goal
 
@@ -61,7 +68,43 @@ The DLL-injection branch (`useDllRedirect`) stays Windows-gated. The junction br
 
 The `launchContexts.set(...)` block at `main.ts:1918-1923` loses its `process.platform === 'win32'` guard so cross-contamination tracking covers Linux too (same `installed` + `startedAtMs` semantics, same 15s threshold).
 
-The snapshot-back wiring in the quit handler likewise drops its Windows guard for the `snapshotHostToAccount` call. The "fresh-account quit <15s" skip rule applies identically.
+The snapshot-back wiring in the quit handler likewise drops its Windows guard for the `snapshotHostToAccount` call. The "fresh-account quit <15s" skip rule applies identically. **But the quit handler only runs if `quitWatcher` actually fires on Linux — see the next section.**
+
+### Snapshot-back trigger (electron/quitWatcher.ts)
+
+The original draft was wrong that quit detection was already cross-platform.
+`quitWatcher.start()` early-returns on non-win32, so on Linux the `quit` event —
+and therefore the snapshot-back — never fires. Two changes:
+
+1. **Run on Linux.** `start()` polls on Linux too. Keep the win32 path exactly as
+   today (a no-op change for Windows).
+
+2. **Detect quit by mumble-tag liveness, not a single PID.** On Windows the bound
+   `Gw2-64.exe` PID is stable for the whole session, so the current
+   `bindings: Map<accountId, pid>` + "is pid still in `getAllRunningGw2Pids()`"
+   model works. On Linux/Proton, GW2's launcher process re-execs into the game
+   once at startup — the originally-bound PID exits ~14s in (observed in the field
+   log) while the *session* continues under a new PID carrying the same
+   `-mumble axiam_<id>` tag. A PID-based watcher would fire a false `quit` at the
+   re-exec, snapshotting a pre-login `Local.dat` and flipping the card to Stopped
+   while the game is still loading.
+
+   So on Linux the watcher tracks **whether any live GW2 process still carries the
+   account's mumble tag** (reusing `getActiveAccountProcesses()`), and fires `quit`
+   only after the tag has been absent for a **grace window** of
+   `QUIT_GRACE_POLLS` consecutive polls (default 3 → ~6s at the 2s interval). The
+   grace window rides over the single startup re-exec gap. `noteStop()` still drops
+   the binding immediately so an explicit Stop never waits out the grace window.
+
+   Implementation shape: `configure()` gains an optional mumble-liveness poller
+   `() => Set<accountId>`; on Linux `tick()` uses it (with the absent-poll counter),
+   on Windows `tick()` keeps the existing pid-set logic untouched. Both paths emit
+   the same `quit` event, so the `main.ts` handler body is platform-agnostic.
+
+**Bonus fix:** because `quitWatcher` never fired on Linux, an account today never
+transitions to `stopped` after the user quits GW2 — the card shows Running
+indefinitely. Enabling the watcher gives Linux the same correct Stopped state
+Windows already has.
 
 ### localDat.ts changes
 
@@ -101,7 +144,8 @@ Existing `installSnapshotToHost` / `snapshotHostToAccount` / `seedAccountLocalDa
 | E4 | Multiple Steam libraries with a compatdata | Pick first match (matches `mutexCloser`). Should never happen with normal Steam usage. |
 | E5 | Non-Steam GW2 install (Lutris, Bottles, raw wine) | `resolveGw2CompatDataDir()` returns null → typed error → launch without `-autologin`. Out of scope to support first-class. |
 | E6 | File ownership | Proton prefix files are user-owned; `fs.copyFileSync` works without sudo or caps. |
-| E7 | Linux quit detection | Already cross-platform — `getAllRunningGw2Pids()` at `main.ts:931-968` matches wine + gw2 strings via `ps`. No change. |
+| E7 | Linux quit detection | **Was wrong in the original draft.** `quitWatcher.start()` is win32-only, so `quit` never fires on Linux and snapshot-back never runs. Fixed by the "Snapshot-back trigger" section: run the watcher on Linux with mumble-tag liveness + a grace window for the startup re-exec. |
+| E10 | GW2 launcher re-exec on Linux | The originally-bound PID exits ~14s after launch as the launcher re-execs into the game (same `-mumble` tag, new PID). The mumble-liveness + `QUIT_GRACE_POLLS` grace window prevents this from being read as a quit. |
 | E8 | Concurrent launches on Linux | Sequential only in phase 1. `launchSerializer` queues clicks; once two instances are running, the second reads whoever's Local.dat is on host. Documented as a known limitation; phase 2 fixes. |
 | E9 | EAC / TOS | GW2 has no EAC on Linux. Replacing Local.dat is indistinguishable from a user editing the file. No exposure. |
 
@@ -133,10 +177,12 @@ Manual verification on a real Linux/Steam install (the only path that exercises 
 - `electron/localDat.test.ts` — add Linux-path tests.
 - `electron/mutexCloser.ts` — use extracted shared helper.
 - `electron/mutexCloser.test.ts` — update tests to match.
-- `electron/main.ts` — drop the Linux skip-branch around install-to-host (`~line 1882-1900`), drop the `process.platform === 'win32'` guard around `launchContexts.set` (`~line 1918`) and around the quit-handler snapshot call.
+- `electron/main.ts` — drop the Linux skip-branch around install-to-host, drop the `process.platform === 'win32'` guard around `launchContexts.set` and around the quit-handler snapshot call; provide the mumble-liveness poller to `quitWatcher.configure()`.
+- `electron/quitWatcher.ts` — run `start()` on Linux; add mumble-tag liveness + `QUIT_GRACE_POLLS` grace window on the Linux path, leaving the win32 PID path untouched.
+- `electron/quitWatcher.test.ts` — add tests for the Linux mumble-grace path (fires after N absent polls; survives a one-poll re-exec gap; `noteStop` skips the grace window).
 
 **Unchanged (already cross-platform):**
-- `quitWatcher.ts`, `launchSerializer.ts`, `launchStateMachine.ts`, `getAllRunningGw2Pids`, `terminatePid`/`terminatePidTree`.
+- `launchSerializer.ts`, `launchStateMachine.ts`, `getAllRunningGw2Pids`, `terminatePid`/`terminatePidTree`.
 
 ## Phase 2 sketch (not in scope)
 
