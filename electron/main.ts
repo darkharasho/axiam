@@ -1436,9 +1436,11 @@ app.on('ready', () => {
     }
   }
 
-  // Configure and start the quit watcher (Windows only). When a tracked GW2
-  // PID disappears AND no other GW2 is running, we snapshot the host Local.dat
-  // back into the account's profile dir to preserve per-account settings.
+  // Configure and start the quit watcher (all platforms). Polls for ended GW2
+  // sessions: on Windows it tracks bound-PID death; on Linux it polls account
+  // mumble-tag liveness with a grace window for GW2's startup re-exec. When a
+  // session ends with no other GW2 running, we snapshot the host Local.dat back
+  // into the account's profile dir to preserve per-account settings.
   quitWatcher.configure(
     () => getAllRunningGw2Pids(),
     QUIT_WATCHER_POLL_INTERVAL_MS,
