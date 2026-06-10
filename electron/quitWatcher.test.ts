@@ -84,7 +84,7 @@ describe('quitWatcher', () => {
     expect(events).toEqual(['acc-a']);
   });
 
-  it('linux: a one-poll re-exec gap does not fire quit', () => {
+  it('linux: counter resets when the account reappears mid-grace window', () => {
     const events: string[] = [];
     quitWatcher.on('quit', (id: string) => events.push(id));
     let live = new Set(['acc-a']);
@@ -100,6 +100,23 @@ describe('quitWatcher', () => {
     quitWatcher.tick();                 // absent 1 again
     quitWatcher.tick();                 // absent 2
     expect(events).toEqual([]);         // never reached grace
+  });
+
+  it('linux: liveness mode fires quit only once after the account stays gone', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    const live = new Set<string>(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    quitWatcher.tick();          // present
+    live.delete('acc-a');
+    quitWatcher.tick();          // absent 1
+    quitWatcher.tick();          // absent 2
+    quitWatcher.tick();          // absent 3 -> fire (binding deleted)
+    quitWatcher.tick();          // still gone, but no binding -> no re-fire
+    quitWatcher.tick();
+    expect(events).toEqual(['acc-a']);
   });
 
   it('linux: noteStop drops the binding without waiting out the grace window', () => {

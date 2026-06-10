@@ -28,6 +28,7 @@ import { EventEmitter } from 'events';
 export type PidPoller = () => number[];
 export type AccountLivenessPoller = () => Set<string>;
 
+// One re-exec gap is a single absent poll; 3 gives 2 polls of buffer beyond it.
 const QUIT_GRACE_POLLS = 3;
 
 class QuitWatcher extends EventEmitter {
@@ -46,6 +47,7 @@ class QuitWatcher extends EventEmitter {
     this.poller = poller;
     this.intervalMs = intervalMs;
     this.livenessPoller = livenessPoller ?? null;
+    this.absentPolls.clear();
   }
 
   start(): void {
@@ -75,25 +77,35 @@ class QuitWatcher extends EventEmitter {
    */
   tick(): void {
     if (this.livenessPoller) {
-      const live = this.livenessPoller();
-      for (const accountId of Array.from(this.bindings.keys())) {
-        if (live.has(accountId)) {
-          this.absentPolls.delete(accountId);
-          continue;
-        }
-        const absent = (this.absentPolls.get(accountId) ?? 0) + 1;
-        if (absent >= QUIT_GRACE_POLLS) {
-          this.bindings.delete(accountId);
-          this.absentPolls.delete(accountId);
-          this.emit('quit', accountId);
-        } else {
-          this.absentPolls.set(accountId, absent);
-        }
-      }
-      return;
+      this.tickLiveness(this.livenessPoller());
+    } else {
+      this.tickPid(new Set(this.poller()));
     }
+  }
 
-    const livePids = new Set(this.poller());
+  /** Linux: an account is "alive" while any process still carries its mumble
+   *  tag. Fire quit only after QUIT_GRACE_POLLS consecutive absent polls so a
+   *  single startup re-exec gap isn't mistaken for a quit. */
+  private tickLiveness(live: Set<string>): void {
+    for (const accountId of Array.from(this.bindings.keys())) {
+      if (live.has(accountId)) {
+        this.absentPolls.delete(accountId);
+        continue;
+      }
+      const absent = (this.absentPolls.get(accountId) ?? 0) + 1;
+      if (absent >= QUIT_GRACE_POLLS) {
+        this.bindings.delete(accountId);
+        this.absentPolls.delete(accountId);
+        this.emit('quit', accountId);
+      } else {
+        this.absentPolls.set(accountId, absent);
+      }
+    }
+  }
+
+  /** Windows: the bound Gw2-64.exe PID is stable for the whole session, so a
+   *  single poll where the PID is gone means the session ended. */
+  private tickPid(livePids: Set<number>): void {
     for (const [accountId, pid] of Array.from(this.bindings.entries())) {
       if (!livePids.has(pid)) {
         this.bindings.delete(accountId);
