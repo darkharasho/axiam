@@ -12,6 +12,7 @@ import { spawn, spawnSync } from 'child_process';
 import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
+import { buildManagedLaunchArgs } from './launchArgs.js';
 import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath, seedAccountLocalDatFromHost } from './localDat.js';
 import { injectDll } from './dllInjector.js';
 import { migrateGw2DirToJunction, repointJunction, unmigrateJunctionToRealDir } from './junction.js';
@@ -681,9 +682,13 @@ function sampleGw2Dat(datPath: string): { size: number; mtimeMs: number } | null
  * non-Steam install patches correctly, falling back to Steam otherwise.
  */
 function launchVanillaForPatch(installDir: string): void {
+  // NO -shareArchive here: this run exists to let the patcher WRITE a pending
+  // update into Gw2.dat, and -shareArchive opens the archive read-only, which
+  // makes the patch a no-op ("Download failed (5)"). It must open the archive
+  // writable so the update actually applies.
   const exePath = gw2ExePath(installDir);
   if (process.platform !== 'linux' && fs.existsSync(exePath)) {
-    const child = spawn(exePath, ['-shareArchive'], {
+    const child = spawn(exePath, [], {
       cwd: installDir,
       detached: true,
       stdio: 'ignore',
@@ -695,7 +700,7 @@ function launchVanillaForPatch(installDir: string): void {
     child.unref();
     return;
   }
-  launchViaSteam(['-shareArchive']);
+  launchViaSteam([]);
 }
 
 /**
@@ -2106,18 +2111,18 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
     return false;
   }
 
-  // Always pass -shareArchive so concurrent instances can both open the
-  // shared game data archive (Gw2.dat) in the install directory. Safe for
-  // single-instance launches too. Skipped if the user already supplied it
-  // via their per-account launchArguments (sanitizedExtraArgs).
-  const userExtras = sanitizedExtraArgs;
-  const hasShareArchive = userExtras.some((a) => a.toLowerCase() === '-sharearchive');
-  const args = [
-    '-mumble', mumbleName,
-    ...(useAutologin ? ['-autologin'] : []),
-    ...(hasShareArchive ? [] : ['-shareArchive']),
-    ...userExtras,
-  ];
+  // -shareArchive lets concurrent instances share one Gw2.dat, but it opens the
+  // archive read-only — which blocks ArenaNet's patcher from writing a pending
+  // update and makes the launcher fail its update check with "Download failed
+  // (5)". So we only add it for the 2nd+ instance (another GW2 is already
+  // running and has already patched). A solo launch omits it so it can patch.
+  // A user who put -shareArchive in their per-account args still gets it.
+  const args = buildManagedLaunchArgs({
+    mumbleName,
+    useAutologin,
+    isMultiInstance: existingGw2Pids.length > 0,
+    userExtras: sanitizedExtraArgs,
+  });
 
   // Remember whether the per-account snapshot was installed to the host path
   // (on Windows the %APPDATA% Local.dat; on Linux the Proton-prefix Local.dat)
