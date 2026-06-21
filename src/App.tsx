@@ -727,7 +727,7 @@ function App() {
             style={{ WebkitAppRegion: 'drag' } as any}
         >
             <span className="text-sm font-semibold text-[var(--theme-title)] flex items-center gap-2">
-                <img src="img/AxiAM.png" alt="AxiAM" className="w-5 h-5 object-contain" />
+                <img src="img/axiam-glyph.svg" alt="AxiAM" className="w-5 h-5 object-contain" />
                 <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em', fontWeight: 700 }}>
                     <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
                 </span>
@@ -829,7 +829,7 @@ function App() {
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar */}
                 <nav className="sidebar">
-                    <img src="img/AxiAM.png" alt="AxiAM" className="sidebar-logo" />
+                    <img src="img/axiam-glyph.svg" alt="AxiAM" className="sidebar-logo" />
 
                     <Tooltip text="Add Account (Ctrl+N)" position="right">
                         <button
