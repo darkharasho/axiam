@@ -1,5 +1,10 @@
 # Release Notes
 
+Version v1.2.6 — June 21, 2026
+
+## New app icon
+AxiAM has a new duotone **rocket** icon, part of a suite-wide refresh. Updated installer/taskbar icon and in-app logo. No functional changes in this release.
+
 Version v1.2.5 — June 10, 2026
 
 ## Fixed "Download failed (5)" on Linux launches
