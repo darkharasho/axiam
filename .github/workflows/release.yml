@@ -96,7 +96,7 @@ jobs:
               'url': release_url,
               'description': notes or 'A new version of AxiAM is available!',
               'color': 0xEF4444,
-              'thumbnail': {'url': 'https://raw.githubusercontent.com/darkharasho/axiam/main/public/img/AxiAM-square.png'},
+              'thumbnail': {'url': 'https://raw.githubusercontent.com/darkharasho/axiam/main/build/icons/icon.png'},
               'footer': {'text': 'AxiAM Release'},
           }
 
