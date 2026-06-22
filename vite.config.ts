@@ -10,7 +10,7 @@ export default defineConfig({
     },
     base: './', // Important for Electron to load assets
     server: {
-        port: 5173,
+        port: 5175,
         strictPort: true,
     },
 })
