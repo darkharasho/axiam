@@ -84,6 +84,14 @@ body { margin: 0; overflow: hidden; user-select: none; }
 }
 .am-rail-btn--accent:hover { color: var(--axi-accent-ink); }
 
+/* --- context menu items --- */
+
+.am-menu-item:hover:not(:disabled) { background: var(--axi-surface-raised); }
+.am-menu-item--danger:hover:not(:disabled) {
+    background: var(--axi-danger);
+    color: var(--axi-accent-ink);
+}
+
 /* --- account cards --- */
 
 .am-card {
@@ -148,6 +156,21 @@ body { margin: 0; overflow: hidden; user-select: none; }
 @keyframes am-work { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 .am-work { animation: am-work 1.1s ease-in-out infinite; }
 
+/* --- toasts --- */
+
+.am-toast-enter {
+    animation: am-toast-in .18s ease-out;
+}
+@keyframes am-toast-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+.am-toast-exit {
+    transform: translateY(8px);
+    opacity: 0;
+    transition: transform .3s ease-in, opacity .3s ease-in;
+}
+
 /* --- bottom sheet (add/edit account) --- */
 
 @keyframes am-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -170,7 +193,8 @@ body { margin: 0; overflow: hidden; user-select: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .am-work, .am-skeleton { animation: none; }
-    .am-sheet { animation: none; }
+    .am-sheet, .am-toast-enter { animation: none; }
+    .am-toast-exit { transition: none; }
     .am-card, .am-rail-btn { transition: none; }
     .theme-transitioning *,
     .theme-transitioning *::before,
