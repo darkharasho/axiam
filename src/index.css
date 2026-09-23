@@ -121,7 +121,9 @@ body { margin: 0; overflow: hidden; user-select: none; }
     color: var(--axi-text-faint);
     cursor: default;
 }
-.am-menu-item:hover:not(:disabled) { background: var(--axi-surface-raised); }
+/* The pop's own background is --axi-surface-raised, so hover must step to
+   ground (the package's .axi-menu__pop label:hover pattern) to be visible. */
+.am-menu-item:hover:not(:disabled) { background: var(--axi-ground); color: var(--axi-text); }
 .am-menu-item--danger:hover:not(:disabled) {
     background: var(--axi-danger);
     color: var(--axi-accent-ink);
