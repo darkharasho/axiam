@@ -53,22 +53,20 @@ type TitleBarProps = {
     version: string;
     isDev: boolean;
     updateState: UpdateChipState | null;
-    onWhatsNew: () => void;
     onMinimize: () => void;
     onMaximize: () => void;
     onClose: () => void;
 };
 
-function TitleBar({ minimal, version, isDev, updateState, onWhatsNew, onMinimize, onMaximize, onClose }: TitleBarProps) {
+function TitleBar({ minimal, version, isDev, updateState, onMinimize, onMaximize, onClose }: TitleBarProps) {
     return (
         <header className="axi-titlebar draggable">
-            <span className="axi-diamond" aria-hidden="true" />
+            <img src="img/axiam-glyph.svg" alt="" className="w-4 h-4 object-contain" aria-hidden="true" />
             <span>AXIAM</span>
             <span style={{ color: 'var(--axi-text-faint)' }}>v{version}</span>
             {isDev && <span className="axi-chip">DEV</span>}
             {updateState && <UpdateBadge state={updateState} />}
             <div className="axi-titlebar__btns no-drag">
-                <button onClick={onWhatsNew} aria-label="What's New"><Sparkles size={13} /></button>
                 {!minimal && <button onClick={onMinimize} aria-label="Minimize"><Minus size={13} /></button>}
                 {!minimal && <button onClick={onMaximize} aria-label="Maximize"><Square size={11} /></button>}
                 <button onClick={onClose} aria-label="Close"><X size={13} /></button>
@@ -715,7 +713,6 @@ function App() {
                     version={appVersion}
                     isDev={showDevChrome}
                     updateState={updateState}
-                    onWhatsNew={() => { void openWhatsNew(); }}
                     onMinimize={minimize}
                     onMaximize={maximize}
                     onClose={close}
@@ -734,7 +731,6 @@ function App() {
                     version={appVersion}
                     isDev={showDevChrome}
                     updateState={updateState}
-                    onWhatsNew={() => { void openWhatsNew(); }}
                     onMinimize={minimize}
                     onMaximize={maximize}
                     onClose={close}
@@ -768,7 +764,6 @@ function App() {
                 version={appVersion}
                 isDev={showDevChrome}
                 updateState={updateState}
-                onWhatsNew={() => { void openWhatsNew(); }}
                 onMinimize={minimize}
                 onMaximize={maximize}
                 onClose={close}
