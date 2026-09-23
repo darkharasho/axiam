@@ -62,7 +62,10 @@ export function ContextMenuContainer() {
         <div
             ref={ref}
             className="axi-menu__pop"
-            style={{ position: 'fixed', left: x, top: y, display: 'flex', flexDirection: 'column', gap: 2 }}
+            style={{
+                position: 'fixed', left: x, top: y, display: 'flex', flexDirection: 'column', gap: 2,
+                '--axi-menu-width': `${menuWidth}px`,
+            } as React.CSSProperties}
             onClick={(e) => e.stopPropagation()}
         >
             {menu.items.map((item, i) => (
