@@ -10,7 +10,7 @@ import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
 import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search, Palette } from 'lucide-react';
 import SkeletonCards from './components/SkeletonCards.tsx';
-import { GW2_THEMES } from './themes/themes';
+import { ACCENTS } from './themes/accents';
 import { ContextMenuContainer } from './components/ContextMenu.tsx';
 import Tooltip from './components/Tooltip.tsx';
 
@@ -763,9 +763,9 @@ function App() {
     }
 
     const cycleTheme = () => {
-        const currentIndex = GW2_THEMES.findIndex((t) => t.id === currentThemeId);
-        const nextIndex = (currentIndex + 1) % GW2_THEMES.length;
-        const next = GW2_THEMES[nextIndex];
+        const currentIndex = ACCENTS.findIndex((t) => t.id === currentThemeId);
+        const nextIndex = (currentIndex + 1) % ACCENTS.length;
+        const next = ACCENTS[nextIndex];
         setCurrentThemeId(next.id);
         applyTheme(next.id);
         // Also persist via settings

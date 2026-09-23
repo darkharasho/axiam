@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Github } from 'lucide-react';
-import { GW2_THEMES } from '../themes/themes';
+import { ACCENTS, DEFAULT_ACCENT_ID } from '../themes/accents';
 import { applyTheme } from '../themes/applyTheme';
 import { showToast } from './Toast.tsx';
 
@@ -26,7 +26,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const [gw2Path, setGw2Path] = useState('');
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
-    const [themeId, setThemeId] = useState('blood_legion');
+    const [themeId, setThemeId] = useState(DEFAULT_ACCENT_ID);
     const [allowMultiInstance, setAllowMultiInstance] = useState<boolean>(false);
     const [showMultiInstanceConfirm, setShowMultiInstanceConfirm] = useState<boolean>(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
@@ -100,7 +100,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             const normalized: SettingsPayload = {
                 gw2Path: settings?.gw2Path || '',
                 masterPasswordPrompt: settings?.masterPasswordPrompt ?? 'every_time',
-                themeId: settings?.themeId || 'blood_legion',
+                themeId: settings?.themeId || DEFAULT_ACCENT_ID,
                 allowMultiInstance: settings?.allowMultiInstance ?? false,
             };
             setGw2Path(normalized.gw2Path);
@@ -256,22 +256,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     <div className="modal-content-reveal" style={{ animationDelay: '150ms' }}>
                         <label className="section-label mb-2 block">Theme</label>
                         <div className="flex flex-wrap gap-2 mb-2">
-                            {GW2_THEMES.map((theme) => {
-                                const bg = theme.vars['--theme-bg'] || '#111';
-                                const accent = theme.vars['--theme-accent-strong'] || theme.vars['--theme-accent'] || '#666';
-                                const isActive = theme.id === themeId;
+                            {ACCENTS.map((accent) => {
+                                const isActive = accent.id === themeId;
                                 return (
                                     <button
-                                        key={theme.id}
+                                        key={accent.id}
                                         type="button"
                                         onClick={() => {
                                             previewThemeRef.current = null;
-                                            setThemeId(theme.id);
-                                            applyTheme(theme.id);
+                                            setThemeId(accent.id);
+                                            applyTheme(accent.id);
                                         }}
                                         onMouseEnter={() => {
                                             previewThemeRef.current = themeId;
-                                            applyTheme(theme.id);
+                                            applyTheme(accent.id);
                                         }}
                                         onMouseLeave={() => {
                                             if (previewThemeRef.current !== null) {
@@ -280,19 +278,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                             }
                                         }}
                                         className={`theme-swatch ${isActive ? 'theme-swatch--active' : ''}`}
-                                        title={theme.name}
+                                        title={accent.label}
                                         style={{
-                                            background: `linear-gradient(135deg, ${bg}, ${accent})`,
+                                            background: accent.hex,
                                         }}
                                     />
                                 );
                             })}
                         </div>
                         <p className="text-[11px] text-[var(--theme-text-muted)] font-medium">
-                            {GW2_THEMES.find((theme) => theme.id === themeId)?.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-0.5 font-light">
-                            {GW2_THEMES.find((theme) => theme.id === themeId)?.description}
+                            {ACCENTS.find((accent) => accent.id === themeId)?.label}
                         </p>
                     </div>
 
