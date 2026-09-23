@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface TooltipProps {
     text: string;
@@ -58,7 +59,9 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
             className="inline-flex"
         >
             {React.cloneElement(children, { title: undefined })}
-            {visible && (
+            {/* Portaled to body: a hovered card is transformed (lift), and a
+                transformed ancestor would re-anchor position:fixed to itself. */}
+            {visible && createPortal(
                 <div
                     style={{
                         position: 'fixed',
@@ -79,7 +82,8 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
                     }}
                 >
                     {text}
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );
