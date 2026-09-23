@@ -168,14 +168,13 @@ const AccountCard: React.FC<AccountCardProps> = ({
                             {account.nickname}
                         </span>
                         <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={STATUS_CHIP[effectiveStatus].cls}
-                                  title={statusCertainty ? `State certainty: ${statusCertainty}` : undefined}>
-                                <span className={`am-status-dot ${STATUS_CHIP[effectiveStatus].dot} ${STATUS_CHIP[effectiveStatus].work ? 'am-work' : ''}`} aria-hidden="true" />
-                                {getStatusLabel(effectiveStatus)}
-                            </span>
-                            {statusCertainty === 'inferred' && (
-                                <span className="axi-chip axi-chip--meta">Inferred</span>
-                            )}
+                            <Tooltip text={`${getStatusLabel(effectiveStatus)}${statusCertainty === 'inferred' ? ' (inferred)' : ''}`}>
+                                <span
+                                    className={`am-status-dot am-status-badge ${STATUS_CHIP[effectiveStatus].dot} ${STATUS_CHIP[effectiveStatus].work ? 'am-work' : ''}`}
+                                    role="img"
+                                    aria-label={getStatusLabel(effectiveStatus)}
+                                />
+                            </Tooltip>
                             {accountApiName && (
                                 <span style={{ color: 'var(--axi-text-faint)' }} className="text-[10px] truncate min-w-0 flex-1" title={accountApiName}>
                                     {accountApiName}
@@ -244,6 +243,13 @@ const AccountCard: React.FC<AccountCardProps> = ({
                     className="flex flex-col gap-1.5"
                     style={{ borderTop: 'var(--axi-border-hairline) solid var(--axi-rule)', marginTop: 8, paddingTop: 8 }}
                 >
+                    <div className="flex items-center gap-2 text-[11px]">
+                        <span style={rowLabelStyle}>Status</span>
+                        <span className={STATUS_CHIP[effectiveStatus].cls}>
+                            <span className={`am-status-dot ${STATUS_CHIP[effectiveStatus].dot} ${STATUS_CHIP[effectiveStatus].work ? 'am-work' : ''}`} aria-hidden="true" />
+                            {getStatusLabel(effectiveStatus)}
+                        </span>
+                    </div>
                     {accountApiName && (
                         <div className="flex items-center gap-2 text-[11px]">
                             <span style={rowLabelStyle}>API Name</span>

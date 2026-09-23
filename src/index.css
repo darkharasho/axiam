@@ -164,6 +164,7 @@ body { margin: 0; overflow: hidden; user-select: none; }
 .am-card--drag-over { outline: var(--axi-border-control) dashed var(--axi-accent); outline-offset: 2px; }
 
 .am-avatar {
+    flex: none; /* a flex child in a tight row would otherwise squash the square */
     width: 36px;
     height: 36px;
     display: grid;
@@ -186,6 +187,9 @@ body { margin: 0; overflow: hidden; user-select: none; }
 .am-status-dot--warn { background: var(--axi-warn); }
 .am-status-dot--danger { background: var(--axi-danger); }
 .am-status-dot--idle { background: var(--axi-surface-raised); }
+
+/* The collapsed card's dot-only status badge: same dot, sized to read alone. */
+.am-status-badge { width: 13px; height: 13px; }
 
 /* Work indicator: compositor-only (rule 11). Blink by opacity, no scale of
    text-bearing layers. Applies to launching/stopping dots and the update
