@@ -794,7 +794,7 @@ function App() {
                         <Tooltip text="Search (Ctrl+F)" position="right">
                             <button
                                 onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => searchInputRef.current?.focus(), 50); }}
-                                className="am-rail-btn no-drag"
+                                className={`am-rail-btn no-drag ${searchOpen ? 'am-rail-btn--active' : ''}`}
                             >
                                 <Search size={15} />
                             </button>
@@ -826,7 +826,7 @@ function App() {
                     <Tooltip text="Settings" position="right">
                         <button
                             onClick={() => setIsSettingsOpen(true)}
-                            className="am-rail-btn no-drag"
+                            className={`am-rail-btn no-drag ${isSettingsOpen ? 'am-rail-btn--active' : ''}`}
                         >
                             <Settings size={16} />
                         </button>

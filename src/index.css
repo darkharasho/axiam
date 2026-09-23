@@ -84,6 +84,30 @@ body { margin: 0; overflow: hidden; user-select: none; }
 }
 .am-rail-btn--accent:hover { color: var(--axi-accent-ink); }
 
+/* Open-state affordance for rail toggles (Search / Settings): an accent ink
+   border, no glow/radius/opacity trick, so it reads even without the hover
+   lift (rule 2/4). */
+.am-rail-btn--active {
+    color: var(--axi-accent);
+    border-color: var(--axi-accent);
+}
+.am-rail-btn--active:hover { color: var(--axi-accent); }
+
+/* Disabled primary action (Play/Stop mid-transition): flat and muted, no
+   lift, no accent block - distinct from the resting/hover states without
+   colour-at-partial-opacity (rule 2). */
+.axi-btn--primary[disabled] {
+    background: var(--axi-surface-raised);
+    color: var(--axi-text-faint);
+    box-shadow: none;
+    cursor: default;
+}
+.axi-btn--primary[disabled]:hover {
+    color: var(--axi-text-faint);
+    box-shadow: none;
+    transform: none;
+}
+
 /* --- context menu items --- */
 
 .am-menu-item:hover:not(:disabled) { background: var(--axi-surface-raised); }
