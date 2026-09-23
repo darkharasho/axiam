@@ -59,12 +59,13 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
             className="inline-flex"
         >
             {React.cloneElement(children, { title: undefined })}
-            {/* Portaled to body: a hovered card is transformed (lift), and a
-                transformed ancestor would re-anchor position:fixed to itself. */}
+            {/* .axi-tooltip draws the box; the portal to body is its contract:
+                a hovered card is transformed (lift), and a transformed ancestor
+                would re-anchor position:fixed to itself. */}
             {visible && createPortal(
                 <div
+                    className="axi-tooltip"
                     style={{
-                        position: 'fixed',
                         left: position === 'right' ? coords.x + 8 : coords.x,
                         top: position === 'right' ? coords.y : (position === 'top' ? coords.y - 6 : coords.y + 6),
                         transform: position === 'right'
@@ -72,13 +73,6 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
                             : position === 'top'
                                 ? 'translate(-50%, -100%)'
                                 : 'translate(-50%, 0)',
-                        zIndex: 99999,
-                        background: 'var(--axi-ink-line)',
-                        color: 'var(--axi-text)',
-                        border: 'var(--axi-border-hairline) solid var(--axi-rule)',
-                        font: 'var(--axi-t-micro)',
-                        padding: '5px 8px',
-                        whiteSpace: 'nowrap',
                     }}
                 >
                     {text}
