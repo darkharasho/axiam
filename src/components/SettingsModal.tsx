@@ -7,6 +7,7 @@ import { showToast } from './Toast.tsx';
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onThemeChange?: (id: string) => void;
 }
 
 type SettingsPayload = {
@@ -22,7 +23,7 @@ const EXIT_MS = 300;
 const hintStyle: React.CSSProperties = { font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginTop: 6 };
 const sectionRuleStyle: React.CSSProperties = { borderTop: 'var(--axi-border-control) solid var(--axi-rule)', paddingTop: 16 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeChange }) => {
     const [visible, setVisible] = useState(false);
     const [closing, setClosing] = useState(false);
     const [gw2Path, setGw2Path] = useState('');
@@ -263,7 +264,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                 type="button"
                                 title={a.label}
                                 aria-pressed={a.id === themeId}
-                                onClick={() => { setThemeId(a.id); applyTheme(a.id); }}
+                                onClick={() => { setThemeId(a.id); applyTheme(a.id); onThemeChange?.(a.id); }}
                                 style={{
                                     height: 28,
                                     background: a.hex,

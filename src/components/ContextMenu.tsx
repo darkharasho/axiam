@@ -87,9 +87,8 @@ export function ContextMenuContainer() {
                             display: 'flex', alignItems: 'center', gap: 8,
                             width: '100%', padding: '7px 8px',
                             background: 'transparent', border: 0,
-                            font: 'var(--axi-t-label)', color: item.danger ? 'var(--axi-danger)' : 'var(--axi-text-dim)',
+                            font: 'var(--axi-t-label)', color: item.disabled ? 'var(--axi-text-faint)' : (item.danger ? 'var(--axi-danger)' : 'var(--axi-text-dim)'),
                             textAlign: 'left', cursor: item.disabled ? 'default' : 'pointer',
-                            opacity: item.disabled ? 0.5 : 1,
                         }}
                     >
                         {item.icon && <span style={{ display: 'inline-flex' }}>{item.icon}</span>}

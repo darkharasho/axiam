@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { X } from 'lucide-react';
@@ -9,29 +9,17 @@ interface WhatsNewScreenProps {
   onClose: () => void;
 }
 
-const EXIT_MS = 250;
-
 export default function WhatsNewScreen({ version, releaseNotes, onClose }: WhatsNewScreenProps) {
-  const [closing, setClosing] = useState(false);
-
-  const animateClose = () => {
-    if (closing) return;
-    setClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, EXIT_MS);
-  };
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        animateClose();
+        onClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closing]);
+  }, [onClose]);
 
   return (
     <div
@@ -41,7 +29,7 @@ export default function WhatsNewScreen({ version, releaseNotes, onClose }: Whats
       {/* Header */}
       <div className="h-11 px-4 flex items-center justify-between" style={{ borderBottom: 'var(--axi-border-hairline) solid var(--axi-rule)' }}>
         <button
-          onClick={animateClose}
+          onClick={onClose}
           className="am-rail-btn"
           title="Close What's New"
           style={{ WebkitAppRegion: 'no-drag' } as any}

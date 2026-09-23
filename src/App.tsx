@@ -925,6 +925,7 @@ function App() {
             <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
+                onThemeChange={setCurrentThemeId}
             />
 
             {isWhatsNewOpen && (
