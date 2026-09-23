@@ -177,7 +177,7 @@ const AccountCard: React.FC<AccountCardProps> = ({
                                 <span className="axi-chip axi-chip--meta">Inferred</span>
                             )}
                             {accountApiName && (
-                                <span style={{ color: 'var(--axi-text-faint)' }} className="text-[10px] truncate max-w-[100px]" title={accountApiName}>
+                                <span style={{ color: 'var(--axi-text-faint)' }} className="text-[10px] truncate min-w-0 flex-1" title={accountApiName}>
                                     {accountApiName}
                                 </span>
                             )}
