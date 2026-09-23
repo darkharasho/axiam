@@ -9,11 +9,9 @@ import { applyTheme } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
 import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search, Palette } from 'lucide-react';
-import AmbientParticles from './components/AmbientParticles.tsx';
 import SkeletonCards from './components/SkeletonCards.tsx';
 import { GW2_THEMES } from './themes/themes';
 import { ContextMenuContainer } from './components/ContextMenu.tsx';
-import Confetti from './components/Confetti.tsx';
 import Tooltip from './components/Tooltip.tsx';
 
 type LaunchPhase = 'idle' | 'launch_requested' | 'patching' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
@@ -59,8 +57,6 @@ function App() {
     const [accountOrder, setAccountOrder] = useState<string[]>([]);
     const [dragOverIndex, setDragOverIndex] = useState(-1);
     const dragSourceIndex = useRef(-1);
-    const [showConfetti, setShowConfetti] = useState(false);
-    const hasEverLaunchedRef = useRef(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [currentThemeId, setCurrentThemeId] = useState('blood_legion');
     const [maximized, setMaximized] = useState(false);
@@ -641,21 +637,6 @@ function App() {
         dragSourceIndex.current = -1;
     };
 
-    /* ───────────────── Confetti ───────────────── */
-    const handleLaunchWithConfetti = async (id: string) => {
-        await handleLaunch(id);
-        if (!hasEverLaunchedRef.current) {
-            const stored = localStorage.getItem('axiam_has_launched');
-            if (!stored) {
-                hasEverLaunchedRef.current = true;
-                localStorage.setItem('axiam_has_launched', '1');
-                setShowConfetti(true);
-            } else {
-                hasEverLaunchedRef.current = true;
-            }
-        }
-    };
-
     /* ───────────────── Keyboard shortcuts ───────────────── */
     useEffect(() => {
         if (!isUnlocked) return;
@@ -695,7 +676,7 @@ function App() {
                 if (isActive || st === 'stopping') {
                     handleStop(acc.id);
                 } else if (st !== 'launching') {
-                    handleLaunchWithConfetti(acc.id);
+                    handleLaunch(acc.id);
                 }
                 return;
             }
@@ -796,7 +777,6 @@ function App() {
     return (
         <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`} style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
             <div className="axiam-mark" aria-hidden="true" />
-            <AmbientParticles />
 
             {/* Compact title bar — drag region + branding + window controls */}
             <div
@@ -943,7 +923,7 @@ function App() {
                                 <AccountCard
                                     key={account.id}
                                     account={account}
-                                    onLaunch={handleLaunchWithConfetti}
+                                    onLaunch={handleLaunch}
                                     onStop={handleStop}
                                     isActiveProcess={activeAccountIds.includes(account.id)}
                                     status={accountStatuses[account.id] ?? 'idle'}
@@ -995,7 +975,6 @@ function App() {
             )}
 
             <ContextMenuContainer />
-            <Confetti active={showConfetti} onDone={() => setShowConfetti(false)} />
             <ToastContainer />
         </div>
     );
