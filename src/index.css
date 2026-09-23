@@ -20,6 +20,22 @@ body { margin: 0; overflow: hidden; user-select: none; }
 .draggable { -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }
 
+/* --- titlebar --- */
+
+/* The 38px strip can't carry a full-size chip: the DEV/update chips slim
+   down to a tag that fits inside the bar without crowding its edges. */
+.axi-titlebar .axi-chip {
+    padding: 1px 7px;
+    gap: 5px;
+}
+
+/* The package buttons align their svg glyphs on the text baseline, which
+   drops them below center of the 44px box. */
+.axi-titlebar__btns button {
+    display: grid;
+    place-items: center;
+}
+
 /* --- accent crossfade (theme cycle) --- */
 
 .theme-transitioning *,
