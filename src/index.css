@@ -110,6 +110,17 @@ body { margin: 0; overflow: hidden; user-select: none; }
 
 /* --- context menu items --- */
 
+.am-menu-item {
+    background: transparent;
+    border: 0;
+    color: var(--axi-text-dim);
+    cursor: pointer;
+}
+.am-menu-item--danger { color: var(--axi-danger); }
+.am-menu-item:disabled {
+    color: var(--axi-text-faint);
+    cursor: default;
+}
 .am-menu-item:hover:not(:disabled) { background: var(--axi-surface-raised); }
 .am-menu-item--danger:hover:not(:disabled) {
     background: var(--axi-danger);
