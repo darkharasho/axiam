@@ -164,7 +164,7 @@ const AccountCard: React.FC<AccountCardProps> = ({
                         {initial}
                     </div>
                     <div className="flex flex-col min-w-0 gap-0.5">
-                        <span className="font-semibold text-[0.9rem] text-[var(--axi-text)] truncate leading-tight" title={account.nickname}>
+                        <span className="font-semibold text-[0.9rem] truncate leading-tight" style={{ color: 'var(--axi-text)' }} title={account.nickname}>
                             {account.nickname}
                         </span>
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -197,7 +197,7 @@ const AccountCard: React.FC<AccountCardProps> = ({
                     <Tooltip text={launchInProgress ? 'Launching...' : (stopInProgress ? 'Stopping...' : (showStopControl ? 'Stop Game' : 'Launch Game'))}>
                         <button
                             onClick={(e) => { e.stopPropagation(); handlePlayClick(); }}
-                            className="axi-btn axi-btn--primary no-drag disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="axi-btn axi-btn--primary no-drag"
                             style={{ padding: 8 }}
                             disabled={actionDisabled}
                         >
