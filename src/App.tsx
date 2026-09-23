@@ -774,8 +774,6 @@ function App() {
             <div className="flex flex-1 overflow-hidden">
                 {/* Rail */}
                 <nav className="am-rail">
-                    <img src="img/axiam-glyph.svg" alt="AxiAM" className="w-5 h-5 object-contain" />
-
                     <Tooltip text="Add Account (Ctrl+N)" position="right">
                         <button
                             onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
