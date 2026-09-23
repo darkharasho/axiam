@@ -8,7 +8,7 @@ import WhatsNewScreen from './components/WhatsNewScreen.tsx';
 import { applyTheme } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
-import { Plus, Settings, Minus, Square, X, RefreshCw, Sparkles, Search, Palette } from 'lucide-react';
+import { Plus, Settings, Minus, Square, X, Sparkles, Search, Palette } from 'lucide-react';
 import SkeletonCards from './components/SkeletonCards.tsx';
 import { ACCENTS } from './themes/accents';
 import { ContextMenuContainer } from './components/ContextMenu.tsx';
@@ -17,6 +17,65 @@ import Tooltip from './components/Tooltip.tsx';
 type LaunchPhase = 'idle' | 'launch_requested' | 'patching' | 'launcher_started' | 'credentials_waiting' | 'credentials_submitted' | 'process_detected' | 'running' | 'stopping' | 'stopped' | 'errored';
 type LaunchCertainty = 'verified' | 'inferred';
 type LaunchStateInfo = { accountId: string; phase: LaunchPhase; certainty: LaunchCertainty; updatedAt: number; note?: string };
+
+type UpdateChipState = {
+    phase: 'checking' | 'downloading' | 'ready' | 'error' | 'up_to_date' | 'dismissing';
+    label: string;
+    progress: number | null;
+};
+
+function UpdateBadge({ state }: { state: UpdateChipState }) {
+    const { phase, label, progress } = state;
+    const shortLabel = phase === 'checking'
+        ? 'CHECKING'
+        : phase === 'downloading'
+            ? (progress !== null ? `UPDATE ${Math.round(progress)}%` : 'UPDATE')
+            : phase === 'ready'
+                ? 'RESTART'
+                : phase === 'up_to_date' || phase === 'dismissing'
+                    ? 'UP TO DATE'
+                    : 'UPDATE ERROR';
+    const isError = phase === 'error';
+    return (
+        <span
+            className={`axi-chip ${isError ? 'axi-chip--danger' : 'axi-chip--meta'} no-drag`}
+            title={label}
+            onClick={phase === 'ready' ? () => window.api?.restartApp() : undefined}
+        >
+            {phase === 'downloading' && <span className="am-status-dot am-status-dot--idle am-work" aria-hidden="true" />}
+            {shortLabel}
+        </span>
+    );
+}
+
+type TitleBarProps = {
+    minimal?: boolean;
+    version: string;
+    isDev: boolean;
+    updateState: UpdateChipState | null;
+    onWhatsNew: () => void;
+    onMinimize: () => void;
+    onMaximize: () => void;
+    onClose: () => void;
+};
+
+function TitleBar({ minimal, version, isDev, updateState, onWhatsNew, onMinimize, onMaximize, onClose }: TitleBarProps) {
+    return (
+        <header className="axi-titlebar draggable">
+            <span className="axi-diamond" aria-hidden="true" />
+            <span>AXIAM</span>
+            <span style={{ color: 'var(--axi-text-faint)' }}>v{version}</span>
+            {isDev && <span className="axi-chip">DEV</span>}
+            {updateState && <UpdateBadge state={updateState} />}
+            <div className="axi-titlebar__btns no-drag">
+                <button onClick={onWhatsNew} aria-label="What's New"><Sparkles size={13} /></button>
+                {!minimal && <button onClick={onMinimize} aria-label="Minimize"><Minus size={13} /></button>}
+                {!minimal && <button onClick={onMaximize} aria-label="Maximize"><Square size={11} /></button>}
+                <button onClick={onClose} aria-label="Close"><X size={13} /></button>
+            </div>
+        </header>
+    );
+}
 
 function App() {
     const ACTIVE_PROCESS_MISS_THRESHOLD = 3;
@@ -59,7 +118,7 @@ function App() {
     const dragSourceIndex = useRef(-1);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [currentThemeId, setCurrentThemeId] = useState('blood_legion');
-    const [maximized, setMaximized] = useState(false);
+    const [, setMaximized] = useState(false);
 
     useEffect(() => {
         return window.api?.onMaximizedChange?.((m: boolean) => setMaximized(m));
@@ -479,65 +538,10 @@ function App() {
                     : updatePhase === 'up_to_date' || updatePhase === 'dismissing'
                         ? 'Up to date'
                         : 'Update error');
-    const updateShortLabel = updatePhase === 'checking'
-        ? 'Checking'
-        : updatePhase === 'downloading'
-            ? (updateProgress !== null ? `${Math.round(updateProgress)}%` : 'Downloading')
-            : updatePhase === 'ready'
-                ? 'Restart'
-                : updatePhase === 'up_to_date' || updatePhase === 'dismissing'
-                    ? 'Up to date'
-                : 'Error';
-    const updateIndicatorClass = `update-indicator ${updatePhase === 'error'
-        ? 'update-indicator--error'
-        : updatePhase === 'ready'
-            ? 'update-indicator--ready'
-            : ''} ${updatePhase === 'dismissing' ? 'update-indicator--exit' : ''}`;
 
-    const renderUpdateIndicator = () => {
-        if (!showUpdateIndicator) return null;
-        const progressWidth = updateProgress === null ? 28 : Math.max(8, Math.min(100, Math.round(updateProgress)));
-        const content = (
-            <>
-                {(updatePhase === 'checking' || updatePhase === 'downloading') && (
-                    <span className="update-indicator__state update-indicator__state--checking" aria-hidden="true">
-                        <span className="update-indicator__ring" />
-                        <RefreshCw size={10} className="update-indicator__spinner animate-spin" />
-                    </span>
-                )}
-                {updatePhase === 'ready' && <span className="update-indicator__state bg-emerald-300" aria-hidden="true" />}
-                {(updatePhase === 'up_to_date' || updatePhase === 'dismissing') && <span className="update-indicator__state bg-emerald-300" aria-hidden="true" />}
-                {updatePhase === 'error' && <span className="update-indicator__state bg-rose-300" aria-hidden="true" />}
-                <span>{updateShortLabel}</span>
-                {updatePhase === 'downloading' && (
-                    <span className="update-indicator__progress" aria-hidden="true">
-                        <span className="update-indicator__progress-fill" style={{ width: `${progressWidth}%` }} />
-                        <span className="update-indicator__progress-shimmer" />
-                    </span>
-                )}
-            </>
-        );
-
-        if (updatePhase === 'ready') {
-            return (
-                <button
-                    type="button"
-                    className={`${updateIndicatorClass} cursor-pointer transition-transform hover:scale-[1.02] active:scale-[0.98]`}
-                    title={updateIndicatorText}
-                    style={{ WebkitAppRegion: 'no-drag' } as any}
-                    onClick={() => window.api?.restartApp()}
-                >
-                    {content}
-                </button>
-            );
-        }
-
-        return (
-            <span className={updateIndicatorClass} title={updateIndicatorText}>
-                {content}
-            </span>
-        );
-    };
+    const updateState: UpdateChipState | null = showUpdateIndicator
+        ? { phase: updatePhase as UpdateChipState['phase'], label: updateIndicatorText, progress: updateProgress }
+        : null;
 
     // Window controls
     const minimize = () => {
@@ -701,48 +705,20 @@ function App() {
         await handleDeleteAccount(id);
     };
 
-    /* ───────────────── Title Bar ───────────────── */
-    const TitleBar = ({ minimal }: { minimal?: boolean }) => (
-        <div
-            className={`h-9 titlebar flex justify-between items-center px-3 select-none relative z-10 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
-            style={{ WebkitAppRegion: 'drag' } as any}
-        >
-            <span className="text-sm font-semibold text-[var(--theme-title)] flex items-center gap-2">
-                <img src="img/axiam-glyph.svg" alt="AxiAM" className="w-5 h-5 object-contain" />
-                <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em', fontWeight: 700 }}>
-                    <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
-                </span>
-                {showDevChrome ? (
-                    <span className="ml-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3em] text-amber-300">
-                        Dev
-                    </span>
-                ) : null}
-                {!showDevChrome ? <span className="text-[10px] font-normal text-[var(--theme-text-dim)] opacity-60">v{appVersion}</span> : null}
-                {renderUpdateIndicator()}
-            </span>
-            <div className="flex items-center gap-0.5 relative z-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                <button
-                    onClick={() => { void openWhatsNew(); }}
-                    className="window-btn"
-                    title="What's New"
-                >
-                    <Sparkles size={13} />
-                </button>
-                {!minimal && (
-                    <>
-                        <button onClick={minimize} className="window-btn"><Minus size={14} /></button>
-                        <button onClick={maximize} className="window-btn"><Square size={11} /></button>
-                    </>
-                )}
-                <button onClick={close} className="window-btn window-btn--close"><X size={14} /></button>
-            </div>
-        </div>
-    );
-
     if (isAuthChecking) {
         return (
-            <div className="h-screen w-screen text-white flex flex-col" style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
-                <TitleBar minimal />
+            <div className="axi-window">
+                <TitleBar
+                    minimal
+                    version={appVersion}
+                    isDev={showDevChrome}
+                    updateState={updateState}
+                    onWhatsNew={() => { void openWhatsNew(); }}
+                    onMinimize={minimize}
+                    onMaximize={maximize}
+                    onClose={close}
+                />
+                <div className="am-mark" aria-hidden="true" />
                 <ToastContainer />
             </div>
         );
@@ -750,8 +726,18 @@ function App() {
 
     if (!isUnlocked) {
         return (
-            <div className="h-screen w-screen text-white flex flex-col" style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
-                <TitleBar minimal />
+            <div className="axi-window">
+                <TitleBar
+                    minimal
+                    version={appVersion}
+                    isDev={showDevChrome}
+                    updateState={updateState}
+                    onWhatsNew={() => { void openWhatsNew(); }}
+                    onMinimize={minimize}
+                    onMaximize={maximize}
+                    onClose={close}
+                />
+                <div className="am-mark" aria-hidden="true" />
                 <MasterPasswordModal
                     mode={masterPasswordMode}
                     onSubmit={handleMasterPasswordSubmit}
@@ -775,46 +761,28 @@ function App() {
     };
 
     return (
-        <div className={`h-screen w-screen text-white flex flex-col overflow-hidden relative ${showDevChrome ? 'border border-[#f59e0b]' : ''}`} style={{ borderRadius: maximized ? 0 : 'var(--window-radius)', overflow: 'hidden' }}>
-            <div className="axiam-mark" aria-hidden="true" />
+        <div className="axi-window">
+            <TitleBar
+                version={appVersion}
+                isDev={showDevChrome}
+                updateState={updateState}
+                onWhatsNew={() => { void openWhatsNew(); }}
+                onMinimize={minimize}
+                onMaximize={maximize}
+                onClose={close}
+            />
+            <div className="am-mark" aria-hidden="true" />
 
-            {/* Compact title bar — drag region + branding + window controls */}
-            <div
-                className={`h-8 titlebar flex items-center px-2 select-none relative z-12 ${showDevChrome ? 'border-b border-[#f59e0b]' : ''}`}
-                style={{ WebkitAppRegion: 'drag' } as any}
-            >
-                <span className="flex items-center gap-1.5 text-[10px] text-[var(--theme-text-dim)] min-w-0">
-                    {showDevChrome ? (
-                        <span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-amber-300">
-                            Dev
-                        </span>
-                    ) : (
-                        <span className="font-light opacity-60">v{appVersion}</span>
-                    )}
-                    {renderUpdateIndicator()}
-                </span>
-                <span className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none">
-                    <span style={{ fontFamily: '"Cinzel", serif', letterSpacing: '0.06em', fontWeight: 700, fontSize: '0.7rem' }}>
-                        <span className="text-white">Axi</span><span style={{ color: 'var(--theme-accent-strong)' }}>AM</span>
-                    </span>
-                </span>
-                <div className="flex items-center gap-0.5 relative z-50 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    <button onClick={minimize} className="window-btn !w-6 !h-6"><Minus size={12} /></button>
-                    <button onClick={maximize} className="window-btn !w-6 !h-6"><Square size={9} /></button>
-                    <button onClick={close} className="window-btn window-btn--close !w-6 !h-6"><X size={12} /></button>
-                </div>
-            </div>
-
-            {/* Main layout: sidebar + content */}
+            {/* Main layout: rail + content */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar */}
-                <nav className="sidebar">
-                    <img src="img/axiam-glyph.svg" alt="AxiAM" className="sidebar-logo" />
+                {/* Rail */}
+                <nav className="am-rail">
+                    <img src="img/axiam-glyph.svg" alt="AxiAM" className="w-5 h-5 object-contain" />
 
                     <Tooltip text="Add Account (Ctrl+N)" position="right">
                         <button
                             onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                            className="sidebar-btn sidebar-btn--accent"
+                            className="am-rail-btn am-rail-btn--accent no-drag"
                         >
                             <Plus size={16} />
                         </button>
@@ -824,19 +792,19 @@ function App() {
                         <Tooltip text="Search (Ctrl+F)" position="right">
                             <button
                                 onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => searchInputRef.current?.focus(), 50); }}
-                                className={`sidebar-btn ${searchOpen ? 'sidebar-btn--active' : ''}`}
+                                className="am-rail-btn no-drag"
                             >
                                 <Search size={15} />
                             </button>
                         </Tooltip>
                     )}
 
-                    <div className="sidebar-divider" />
+                    <hr style={{ width: 22, border: 0, borderTop: 'var(--axi-border-hairline) solid var(--axi-rule)' }} />
 
                     <Tooltip text="What's New" position="right">
                         <button
                             onClick={() => { void openWhatsNew(); }}
-                            className="sidebar-btn"
+                            className="am-rail-btn no-drag"
                         >
                             <Sparkles size={14} />
                         </button>
@@ -845,7 +813,7 @@ function App() {
                     <Tooltip text="Cycle Theme" position="right">
                         <button
                             onClick={cycleTheme}
-                            className="sidebar-btn"
+                            className="am-rail-btn no-drag"
                         >
                             <Palette size={15} />
                         </button>
@@ -856,7 +824,7 @@ function App() {
                     <Tooltip text="Settings" position="right">
                         <button
                             onClick={() => setIsSettingsOpen(true)}
-                            className={`sidebar-btn ${isSettingsOpen ? 'sidebar-btn--active' : ''}`}
+                            className="am-rail-btn no-drag"
                         >
                             <Settings size={16} />
                         </button>
@@ -867,31 +835,23 @@ function App() {
                 <div className="flex-1 flex flex-col overflow-hidden relative">
                     {/* Search bar */}
                     {searchOpen && (
-                        <div className={`px-3 pt-2 relative z-10 ${searchOpen ? 'search-bar-enter' : ''}`}>
-                            <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5">
-                                <Search size={14} className="text-[var(--theme-text-dim)] shrink-0" />
-                                <input
-                                    ref={searchInputRef}
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Escape') {
-                                            setSearchOpen(false);
-                                            setSearchQuery('');
-                                        }
-                                    }}
-                                    className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--theme-text)] placeholder:text-[var(--theme-text-dim)] select-text"
-                                    placeholder="Search accounts..."
-                                    autoFocus
-                                />
-                                <button
-                                    onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-                                    className="window-btn !w-6 !h-6"
-                                >
-                                    <X size={12} />
-                                </button>
-                            </div>
+                        <div className="axi-search" style={{ margin: '10px 12px 0' }}>
+                            <Search size={14} className="axi-search__icon" />
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(0); }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                        setSearchOpen(false);
+                                        setSearchQuery('');
+                                    }
+                                }}
+                                className="axi-input"
+                                placeholder="Search accounts…"
+                                autoFocus
+                            />
                         </div>
                     )}
 
