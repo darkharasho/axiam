@@ -49,10 +49,10 @@ export function ToastContainer() {
             {toasts.map((toast) => (
                 <div
                     key={toast.id}
-                    className={`pointer-events-auto px-4 py-2 rounded-xl shadow-lg text-xs font-medium glass ${
-                        toast.exiting ? 'toast-exit' : 'toast-enter'
-                    }`}
+                    className={`axi-panel pointer-events-auto ${toast.exiting ? 'am-toast-exit' : 'am-toast-enter'}`}
+                    style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, font: 'var(--axi-t-label)' }}
                 >
+                    <span className={`am-status-dot ${toast.type === 'error' ? 'am-status-dot--danger' : 'am-status-dot--idle'}`} />
                     {toast.message}
                 </div>
             ))}

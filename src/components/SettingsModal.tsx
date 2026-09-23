@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Github } from 'lucide-react';
-import { GW2_THEMES } from '../themes/themes';
+import { ACCENTS, DEFAULT_ACCENT_ID, resolveAccentId } from '../themes/accents';
 import { applyTheme } from '../themes/applyTheme';
 import { showToast } from './Toast.tsx';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onThemeChange?: (id: string) => void;
 }
 
 type SettingsPayload = {
@@ -19,14 +20,16 @@ type SettingsPayload = {
 const AUTOSAVE_DEBOUNCE_MS = 350;
 const EXIT_MS = 300;
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const hintStyle: React.CSSProperties = { font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginTop: 6 };
+const sectionRuleStyle: React.CSSProperties = { borderTop: 'var(--axi-border-control) solid var(--axi-rule)', paddingTop: 16 };
+
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeChange }) => {
     const [visible, setVisible] = useState(false);
     const [closing, setClosing] = useState(false);
-    const previewThemeRef = useRef<string | null>(null);
     const [gw2Path, setGw2Path] = useState('');
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
-    const [themeId, setThemeId] = useState('blood_legion');
+    const [themeId, setThemeId] = useState(DEFAULT_ACCENT_ID);
     const [allowMultiInstance, setAllowMultiInstance] = useState<boolean>(false);
     const [showMultiInstanceConfirm, setShowMultiInstanceConfirm] = useState<boolean>(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
@@ -100,7 +103,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             const normalized: SettingsPayload = {
                 gw2Path: settings?.gw2Path || '',
                 masterPasswordPrompt: settings?.masterPasswordPrompt ?? 'every_time',
-                themeId: settings?.themeId || 'blood_legion',
+                // Legacy pre-redesign installs persisted a GW2-lore theme id
+                // (e.g. `charr_warband`); route hydration through
+                // resolveAccentId so state always holds a valid ACCENTS id.
+                themeId: resolveAccentId(settings?.themeId),
                 allowMultiInstance: settings?.allowMultiInstance ?? false,
             };
             setGw2Path(normalized.gw2Path);
@@ -189,218 +195,199 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
     return (
         <>
-        <div className="fixed left-0 right-0 bottom-0 top-9 z-50">
-            <button
-                className={`absolute inset-0 ${closing ? 'modal-fade-out' : 'modal-fade-in'}`}
-                style={{ background: 'var(--theme-overlay)', backdropFilter: 'blur(2px)' }}
-                onClick={animateClose}
-                aria-label="Close Settings"
-            />
-            <div
-                className={`absolute right-0 top-0 h-full w-full max-w-md flex flex-col overflow-hidden ${closing ? 'modal-slide-out-right' : 'modal-slide-in'}`}
-                style={{ background: 'var(--theme-surface)', borderLeft: '1px solid var(--theme-border)' }}
-            >
-                {/* Header */}
-                <div className="flex justify-between items-center px-5 py-3.5 border-b border-[var(--theme-border)] shrink-0">
-                    <h2 className="text-lg font-bold text-white">Settings</h2>
-                    <button onClick={animateClose} className="titlebar-btn p-1.5">
-                        <X size={18} />
-                    </button>
-                </div>
+        <button
+            className="axi-scrim"
+            style={{ top: 38 }}
+            onClick={animateClose}
+            aria-label="Close Settings"
+        />
+        <div className="axi-drawer max-w-md" style={{ top: 38 }}>
+            <div className="axi-drawer__head">
+                <h2>Settings</h2>
+                <button onClick={animateClose} className="axi-drawer__close" aria-label="Close Settings">
+                    <X size={16} />
+                </button>
+            </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-                    {/* GW2 Path */}
-                    <div className="modal-content-reveal" style={{ animationDelay: '50ms' }}>
-                        <label className="section-label mb-1.5 block">Guild Wars 2 Path</label>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={gw2Path}
-                                onChange={(e) => setGw2Path(e.target.value)}
-                                className="input-glass text-sm select-text flex-1"
-                                placeholder="/path/to/Gw2-64.exe"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => { void handleAutoLocateGw2Path(); }}
-                                disabled={isLocatingGw2Path}
-                                className="btn-surface px-3 py-2 text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Attempt to auto-locate Guild Wars 2 executable"
-                            >
-                                {isLocatingGw2Path ? 'Locating...' : 'Auto Locate'}
-                            </button>
-                        </div>
-                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light leading-relaxed">
-                            Full path to the executable. If empty, launch defaults to Steam.
-                        </p>
-                    </div>
-
-                    {/* Master Password Prompt */}
-                    <div className="modal-content-reveal" style={{ animationDelay: '100ms' }}>
-                        <label className="section-label mb-1.5 block">Master Password Prompt</label>
-                        <select
-                            value={masterPasswordPrompt}
-                            onChange={(e) => setMasterPasswordPrompt(e.target.value as 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never')}
-                            className="input-glass input-glass-select text-sm select-text"
-                        >
-                            <option value="every_time">Every time</option>
-                            <option value="daily">Once a day</option>
-                            <option value="weekly">Once a week</option>
-                            <option value="monthly">Once a month</option>
-                            <option value="never">Never</option>
-                        </select>
-                    </div>
-
-                    {/* Theme */}
-                    <div className="modal-content-reveal" style={{ animationDelay: '150ms' }}>
-                        <label className="section-label mb-2 block">Theme</label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {GW2_THEMES.map((theme) => {
-                                const bg = theme.vars['--theme-bg'] || '#111';
-                                const accent = theme.vars['--theme-accent-strong'] || theme.vars['--theme-accent'] || '#666';
-                                const isActive = theme.id === themeId;
-                                return (
-                                    <button
-                                        key={theme.id}
-                                        type="button"
-                                        onClick={() => {
-                                            previewThemeRef.current = null;
-                                            setThemeId(theme.id);
-                                            applyTheme(theme.id);
-                                        }}
-                                        onMouseEnter={() => {
-                                            previewThemeRef.current = themeId;
-                                            applyTheme(theme.id);
-                                        }}
-                                        onMouseLeave={() => {
-                                            if (previewThemeRef.current !== null) {
-                                                applyTheme(previewThemeRef.current);
-                                                previewThemeRef.current = null;
-                                            }
-                                        }}
-                                        className={`theme-swatch ${isActive ? 'theme-swatch--active' : ''}`}
-                                        title={theme.name}
-                                        style={{
-                                            background: `linear-gradient(135deg, ${bg}, ${accent})`,
-                                        }}
-                                    />
-                                );
-                            })}
-                        </div>
-                        <p className="text-[11px] text-[var(--theme-text-muted)] font-medium">
-                            {GW2_THEMES.find((theme) => theme.id === themeId)?.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-0.5 font-light">
-                            {GW2_THEMES.find((theme) => theme.id === themeId)?.description}
-                        </p>
-                    </div>
-
-                    {/* Diagnostics */}
-                    <div className="modal-content-reveal" style={{ animationDelay: '200ms' }}>
-                        <label className="section-label mb-2 block">Diagnostics</label>
+            <div className="axi-drawer__body flex flex-col gap-5">
+                {/* GW2 Path */}
+                <div>
+                    <div className="axi-eyebrow">Guild Wars 2 Path</div>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={gw2Path}
+                            onChange={(e) => setGw2Path(e.target.value)}
+                            className="axi-input select-text"
+                            style={{ flex: 1 }}
+                            placeholder="/path/to/Gw2-64.exe"
+                        />
                         <button
                             type="button"
-                            onClick={() => { void handleExportDiagnostics(); }}
-                            disabled={isExportingDiagnostics}
-                            className="btn-surface w-full px-3 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => { void handleAutoLocateGw2Path(); }}
+                            disabled={isLocatingGw2Path}
+                            className="axi-btn"
+                            style={{ whiteSpace: 'nowrap' }}
+                            title="Attempt to auto-locate Guild Wars 2 executable"
                         >
-                            {isExportingDiagnostics ? 'Exporting...' : 'Export Diagnostics'}
+                            {isLocatingGw2Path ? 'Locating...' : 'Auto Locate'}
                         </button>
-                        <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light">
-                            Creates a support file with runtime info and recent logs.
-                        </p>
                     </div>
+                    <p style={hintStyle}>
+                        Full path to the executable. If empty, launch defaults to Steam.
+                    </p>
+                </div>
 
-                    {/* Community */}
-                    <div className="modal-content-reveal" style={{ animationDelay: '250ms' }}>
-                        <label className="section-label mb-2 block">Community</label>
-                        <div className="grid grid-cols-2 gap-2">
+                {/* Master Password Prompt */}
+                <div>
+                    <div className="axi-eyebrow">Master Password Prompt</div>
+                    <select
+                        value={masterPasswordPrompt}
+                        onChange={(e) => setMasterPasswordPrompt(e.target.value as 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never')}
+                        className="axi-select"
+                    >
+                        <option value="every_time">Every time</option>
+                        <option value="daily">Once a day</option>
+                        <option value="weekly">Once a week</option>
+                        <option value="monthly">Once a month</option>
+                        <option value="never">Never</option>
+                    </select>
+                </div>
+
+                {/* Theme */}
+                <div>
+                    <div className="axi-eyebrow">Theme</div>
+                    <div className="grid grid-cols-6 gap-2">
+                        {ACCENTS.map((a) => (
                             <button
-                                onClick={() => { void window.api.openExternal('https://discord.gg/UjzMXMGXEg'); }}
-                                className="btn-surface px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2"
-                                title="Open Discord"
-                            >
-                                <DiscordIcon />
-                                Discord
-                            </button>
-                            <button
-                                onClick={() => { void window.api.openExternal('https://github.com/darkharasho/axiam'); }}
-                                className="btn-surface px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2"
-                                title="Open GitHub"
-                            >
-                                <Github size={15} />
-                                GitHub
-                            </button>
-                        </div>
+                                key={a.id}
+                                type="button"
+                                title={a.label}
+                                aria-pressed={a.id === themeId}
+                                onClick={() => { setThemeId(a.id); applyTheme(a.id); onThemeChange?.(a.id); }}
+                                style={{
+                                    height: 28,
+                                    background: a.hex,
+                                    border: 'var(--axi-border-hairline) solid var(--axi-ink-line)',
+                                    outline: a.id === themeId ? 'var(--axi-border-control) solid var(--axi-text)' : 'none',
+                                    outlineOffset: 2,
+                                }}
+                            />
+                        ))}
                     </div>
+                    <p style={hintStyle}>
+                        {ACCENTS.find((a) => a.id === themeId)?.label}
+                    </p>
+                </div>
 
-                    {/* Experimental — Windows only. The DLL-injection-based
-                       per-account-credentials strategy is implemented for
-                       Win32 Gw2-64.exe; Linux/Proton needs a different
-                       approach (Wine DLL overrides, WINE_OVERRIDES, or a
-                       Wine-aware shim) that we haven't tackled yet. */}
-                    {window.api.platform === 'win32' && (
-                        <div className="modal-content-reveal border-t border-[var(--theme-border)] pt-4 mt-4" style={{ animationDelay: '275ms' }}>
-                            <h3 className="text-sm font-medium text-[var(--theme-text)] mb-2">Experimental</h3>
-                            <label className="flex items-start gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    className="mt-1"
-                                    checked={allowMultiInstance}
-                                    onChange={(e) => {
-                                        if (e.target.checked && !allowMultiInstance) {
-                                            setAllowMultiInstance(true);            // optimistic
-                                            setShowMultiInstanceConfirm(true);
-                                        } else {
-                                            setAllowMultiInstance(false);
-                                        }
-                                    }}
-                                />
-                                <div>
-                                    <div className="text-sm text-[var(--theme-text)]">Allow multiple GW2 instances</div>
-                                    <div className="text-xs text-[var(--theme-text-dim)] mt-1">
-                                        Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
-                                        own credentials. Multi-boxing is tolerated by ArenaNet but not officially
-                                        supported — use at your own risk. First launch of a new account will pre-fill
-                                        another account's email; log in once with the correct account and it'll save
-                                        per-account from then on.
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
-                    )}
+                {/* Diagnostics */}
+                <div>
+                    <div className="axi-eyebrow">Diagnostics</div>
+                    <button
+                        type="button"
+                        onClick={() => { void handleExportDiagnostics(); }}
+                        disabled={isExportingDiagnostics}
+                        className="axi-btn w-full justify-center"
+                    >
+                        {isExportingDiagnostics ? 'Exporting...' : 'Export Diagnostics'}
+                    </button>
+                    <p style={hintStyle}>
+                        Creates a support file with runtime info and recent logs.
+                    </p>
+                </div>
 
-                    {/* Footer */}
-                    <div className="flex justify-between items-center pt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>
-                        <span className="text-[10px] text-[var(--theme-text-dim)] font-light">Auto-saves</span>
+                {/* Community */}
+                <div>
+                    <div className="axi-eyebrow">Community</div>
+                    <div className="grid grid-cols-2 gap-2">
                         <button
-                            onClick={animateClose}
-                            className="btn-ghost px-4 py-2 text-sm"
+                            onClick={() => { void window.api.openExternal('https://discord.gg/UjzMXMGXEg'); }}
+                            className="axi-btn axi-btn--ghost justify-center"
+                            title="Open Discord"
                         >
-                            Close
+                            <DiscordIcon />
+                            Discord
+                        </button>
+                        <button
+                            onClick={() => { void window.api.openExternal('https://github.com/darkharasho/axiam'); }}
+                            className="axi-btn axi-btn--ghost justify-center"
+                            title="Open GitHub"
+                        >
+                            <Github size={15} />
+                            GitHub
                         </button>
                     </div>
+                </div>
+
+                {/* Experimental — Windows only. The DLL-injection-based
+                   per-account-credentials strategy is implemented for
+                   Win32 Gw2-64.exe; Linux/Proton needs a different
+                   approach (Wine DLL overrides, WINE_OVERRIDES, or a
+                   Wine-aware shim) that we haven't tackled yet. */}
+                {window.api.platform === 'win32' && (
+                    <div style={sectionRuleStyle}>
+                        <div className="axi-eyebrow">Experimental</div>
+                        <div className="flex items-start gap-3">
+                            <button
+                                role="switch"
+                                aria-checked={allowMultiInstance}
+                                className="axi-switch"
+                                style={{ marginTop: 2 }}
+                                onClick={() => {
+                                    if (!allowMultiInstance) {
+                                        setAllowMultiInstance(true);            // optimistic
+                                        setShowMultiInstanceConfirm(true);
+                                    } else {
+                                        setAllowMultiInstance(false);
+                                    }
+                                }}
+                            >
+                                <span className="axi-switch__knob" />
+                            </button>
+                            <div>
+                                <div style={{ font: 'var(--axi-t-label)', color: 'var(--axi-text)' }}>Allow multiple GW2 instances</div>
+                                <div style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginTop: 4 }}>
+                                    Lets AxiAM launch more than one Guild Wars 2 client at a time, each with its
+                                    own credentials. Multi-boxing is tolerated by ArenaNet but not officially
+                                    supported — use at your own risk. First launch of a new account will pre-fill
+                                    another account's email; log in once with the correct account and it'll save
+                                    per-account from then on.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Footer */}
+                <div className="flex justify-between items-center" style={sectionRuleStyle}>
+                    <span style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-faint)' }}>Auto-saves</span>
+                    <button
+                        onClick={animateClose}
+                        className="axi-btn axi-btn--ghost"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
         {showMultiInstanceConfirm && (
             <div
-                className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+                className="axi-scrim"
+                style={{ zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
                 role="dialog"
                 aria-modal="true"
             >
-                <div className="bg-[var(--theme-surface)] border border-[var(--theme-border)] rounded-lg max-w-sm w-full p-4">
-                    <h4 className="text-sm font-medium text-[var(--theme-text)] mb-2">
+                <div className="axi-panel" style={{ maxWidth: 380, width: '100%' }}>
+                    <h4 style={{ font: 'var(--axi-t-h3)', letterSpacing: 'var(--axi-ls-h3)', margin: '0 0 10px' }}>
                         Enable multi-instance launches?
                     </h4>
-                    <p className="text-xs text-[var(--theme-text-dim)] mb-3">
+                    <p style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginBottom: 12 }}>
                         AxiAM will close a kernel object inside the running GW2 process so a
                         second client can start, and inject a small library into each
                         Gw2-64.exe that redirects credential reads to a per-account file —
                         the same techniques used by Gw2Launcher for over a decade.
                     </p>
-                    <p className="text-xs text-[var(--theme-text-dim)] mb-4">
+                    <p style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginBottom: 16 }}>
                         Tolerated by ArenaNet but not officially endorsed. The first launch
                         of each new account pre-fills another account's email; log in once
                         with the correct account and it saves per-profile from then on.
@@ -409,7 +396,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     <div className="flex justify-end gap-2">
                         <button
                             type="button"
-                            className="btn-surface px-3 py-1.5 text-xs"
+                            className="axi-btn"
                             onClick={() => {
                                 setAllowMultiInstance(false);            // revert optimistic
                                 setShowMultiInstanceConfirm(false);
@@ -419,7 +406,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         </button>
                         <button
                             type="button"
-                            className="btn-primary px-3 py-1.5 text-xs"
+                            className="axi-btn axi-btn--primary"
                             onClick={() => {
                                 setAllowMultiInstance(true);
                                 setShowMultiInstanceConfirm(false);

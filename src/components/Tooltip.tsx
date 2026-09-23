@@ -60,7 +60,6 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
             {React.cloneElement(children, { title: undefined })}
             {visible && (
                 <div
-                    className="tooltip-bubble"
                     style={{
                         position: 'fixed',
                         left: position === 'right' ? coords.x + 8 : coords.x,
@@ -71,6 +70,12 @@ export default function Tooltip({ text, children, delay = 400, position = 'top' 
                                 ? 'translate(-50%, -100%)'
                                 : 'translate(-50%, 0)',
                         zIndex: 99999,
+                        background: 'var(--axi-ink-line)',
+                        color: 'var(--axi-text)',
+                        border: 'var(--axi-border-hairline) solid var(--axi-rule)',
+                        font: 'var(--axi-t-micro)',
+                        padding: '5px 8px',
+                        whiteSpace: 'nowrap',
                     }}
                 >
                     {text}

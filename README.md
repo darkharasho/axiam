@@ -98,7 +98,7 @@ electron/
   crypto.ts            # Encryption utilities
 ```
 
-- **UI**: React 18 with Tailwind CSS and a custom glassmorphic design system
+- **UI**: React 18 with Tailwind layout utilities over @axiapps/axi-design
 - **Encryption**: AES-256-GCM via Node.js `crypto` module, keyed from the master password
 - **Auto-updater**: electron-updater with GitHub Releases as the update source
 - **Build tooling**: Vite for dev/bundling, electron-builder for packaging

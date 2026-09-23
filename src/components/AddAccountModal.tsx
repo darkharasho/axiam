@@ -14,6 +14,9 @@ interface AddAccountModalProps {
 
 const EXIT_MS = 300;
 
+const hintStyle: React.CSSProperties = { font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginTop: 6 };
+const sectionRuleStyle: React.CSSProperties = { borderTop: 'var(--axi-border-control) solid var(--axi-rule)', paddingTop: 14 };
+
 const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSave, onDelete, onClearLogin, hasLocalDat, initialData }) => {
     const [nickname, setNickname] = useState('');
     const [email, setEmail] = useState('');
@@ -119,102 +122,111 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
     if (!visible) return null;
 
     return (
-        <div className={`fixed left-0 right-0 bottom-0 top-9 z-50 flex flex-col ${closing ? 'modal-slide-out' : 'modal-slide-up'}`}
-             style={{ background: 'var(--theme-surface)' }}>
+        <div
+            className="am-sheet fixed left-0 right-0 bottom-0 z-50 flex flex-col"
+            style={{ top: 38 }}
+        >
             {/* Header */}
-            <div className="flex justify-between items-center px-5 py-3.5 border-b border-[var(--theme-border)]">
-                <h2 className="text-lg font-bold text-white">{initialData ? 'Edit Account' : 'Add Account'}</h2>
-                <button onClick={animateClose} className="titlebar-btn p-1.5">
-                    <X size={18} />
+            <div
+                className="flex justify-between items-center"
+                style={{ padding: '14px 20px', borderBottom: 'var(--axi-border-control) solid var(--axi-ink-line)' }}
+            >
+                <h2 style={{ font: 'var(--axi-t-h2)', letterSpacing: 'var(--axi-ls-h2)', margin: 0 }}>
+                    {initialData ? 'Edit Account' : 'Add Account'}
+                </h2>
+                <button onClick={animateClose} className="axi-btn axi-btn--ghost" style={{ padding: 8 }} aria-label="Close">
+                    <X size={16} />
                 </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                <div className="modal-content-reveal" style={{ animationDelay: '50ms' }}>
-                    <label className="section-label mb-1.5 block">Nickname</label>
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col gap-4" style={{ padding: '16px 20px' }}>
+                <div>
+                    <div className="axi-eyebrow">Nickname</div>
                     <input
                         type="text"
                         value={nickname}
                         onChange={(e) => setNickname(e.target.value)}
-                        className="input-glass select-text"
+                        className="axi-input select-text"
                         placeholder="Main Account"
                         required
                         autoFocus
                     />
                 </div>
 
-                <div className="modal-content-reveal" style={{ animationDelay: '100ms' }}>
-                    <label className="section-label mb-1.5 block">Email</label>
+                <div>
+                    <div className="axi-eyebrow">Email</div>
                     <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="input-glass select-text"
+                        className="axi-input select-text"
                         placeholder="example@arena.net"
                         required
                     />
                 </div>
 
-                <div className="modal-content-reveal" style={{ animationDelay: '150ms' }}>
-                    <label className="section-label mb-1.5 block">Password</label>
+                <div>
+                    <div className="axi-eyebrow">Password</div>
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="input-glass select-text"
+                        className="axi-input select-text"
                         placeholder={initialData ? 'Unchanged' : 'Password'}
                         required={!initialData}
                     />
-                    {initialData && <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light">Leave empty to keep existing password.</p>}
+                    {initialData && <p style={hintStyle}>Leave empty to keep existing password.</p>}
                 </div>
 
-                <div className="modal-content-reveal" style={{ animationDelay: '200ms' }}>
-                    <label className="section-label mb-1.5 block">Additional Launch Arguments</label>
+                <div>
+                    <div className="axi-eyebrow">Additional Launch Arguments</div>
                     <input
                         type="text"
                         value={launchArguments}
                         onChange={(e) => setLaunchArguments(e.target.value)}
-                        className="input-glass text-sm select-text"
+                        className="axi-input select-text"
                         placeholder="-shareArchive -windowed -mapLoadinfo"
                     />
-                    <p className="text-[10px] text-[var(--theme-text-dim)] mt-1.5 font-light">
+                    <p style={hintStyle}>
                         Internal args like autologin/mumble/credentials are managed automatically.{' '}
                         <button
                             type="button"
                             onClick={() => { void window.api.openExternal('https://wiki.guildwars2.com/wiki/Command_line_arguments'); }}
-                            className="underline text-[var(--theme-text-muted)] hover:text-white transition-colors"
+                            className="axi-btn axi-btn--ghost"
+                            style={{ padding: '2px 6px', display: 'inline-flex' }}
                         >
                             View all GW2 args
                         </button>
                     </p>
                 </div>
 
-                <div className="modal-content-reveal" style={{ animationDelay: '250ms' }}>
-                    <label className="section-label mb-1.5 block">GW2 API Key (Optional)</label>
+                <div>
+                    <div className="axi-eyebrow">GW2 API Key (Optional)</div>
                     <input
                         type="password"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        className="input-glass text-sm select-text"
+                        className="axi-input select-text"
                         placeholder="Used to resolve account name"
                     />
                 </div>
 
                 {/* Saved Login section */}
                 {initialData && (
-                    <div className="modal-content-reveal pt-3 mt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)]" style={{ animationDelay: '300ms' }}>
-                        <label className="section-label mb-2 block">Saved Login</label>
+                    <div style={sectionRuleStyle}>
+                        <div className="axi-eyebrow">Saved Login</div>
                         <div className="flex items-center gap-3">
-                            <span className="text-[12px] text-[var(--theme-text-muted)] font-light flex-1">
-                                {hasLocalDat ? 'Login data saved' : 'No saved login \u2014 log in manually with "Remember" checked'}
+                            <span style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', flex: 1 }}>
+                                {hasLocalDat ? 'Login data saved' : 'No saved login — log in manually with "Remember" checked'}
                             </span>
                             <div className="flex gap-1.5 shrink-0">
                                 {hasLocalDat && onClearLogin && (
                                     <button
                                         type="button"
                                         onClick={() => onClearLogin(initialData.id)}
-                                        className="btn-danger px-3 py-1.5 text-xs"
+                                        className="axi-btn"
+                                        style={{ color: 'var(--axi-danger)' }}
                                     >
                                         Clear
                                     </button>
@@ -226,33 +238,34 @@ const AddAccountModal: React.FC<AddAccountModalProps> = ({ isOpen, onClose, onSa
 
                 {/* Actions */}
                 {initialData ? (
-                    <div className="flex justify-between items-center pt-3 mt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '350ms' }}>
+                    <div className="flex justify-between items-center" style={sectionRuleStyle}>
                         <button
                             type="button"
                             onClick={handleDelete}
-                            className="btn-danger px-4 py-2 text-sm"
+                            className="axi-btn"
+                            style={{ color: 'var(--axi-danger)' }}
                         >
                             Delete
                         </button>
                         <button
                             type="submit"
-                            className="btn-primary px-5 py-2 text-sm font-semibold"
+                            className="axi-btn axi-btn--primary"
                         >
                             Save
                         </button>
                     </div>
                 ) : (
-                    <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-[color-mix(in_srgb,var(--theme-border)_50%,transparent)] modal-content-reveal" style={{ animationDelay: '300ms' }}>
+                    <div className="flex justify-end gap-2" style={sectionRuleStyle}>
                         <button
                             type="button"
                             onClick={animateClose}
-                            className="btn-ghost px-4 py-2 text-sm"
+                            className="axi-btn axi-btn--ghost"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="btn-primary px-5 py-2 text-sm font-semibold"
+                            className="axi-btn axi-btn--primary"
                         >
                             Save
                         </button>

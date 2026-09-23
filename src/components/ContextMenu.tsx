@@ -23,7 +23,6 @@ export function showContextMenu(x: number, y: number, items: ContextMenuItem[]) 
 
 export function ContextMenuContainer() {
     const [menu, setMenu] = useState<ContextMenuState | null>(null);
-    const [closing, setClosing] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -32,11 +31,7 @@ export function ContextMenuContainer() {
     }, []);
 
     const close = useCallback(() => {
-        setClosing(true);
-        setTimeout(() => {
-            setMenu(null);
-            setClosing(false);
-        }, 150);
+        setMenu(null);
     }, []);
 
     useEffect(() => {
@@ -66,26 +61,35 @@ export function ContextMenuContainer() {
     return (
         <div
             ref={ref}
-            className={`context-menu ${closing ? 'context-menu--exit' : ''}`}
-            style={{ left: x, top: y }}
+            className="axi-menu__pop"
+            style={{
+                position: 'fixed', left: x, top: y, display: 'flex', flexDirection: 'column', gap: 2,
+                '--axi-menu-width': `${menuWidth}px`,
+            } as React.CSSProperties}
             onClick={(e) => e.stopPropagation()}
         >
             {menu.items.map((item, i) => (
                 item.divider ? (
-                    <div key={i} className="context-menu-divider" />
+                    <div key={i} style={{ borderTop: 'var(--axi-border-hairline) solid var(--axi-rule)', margin: '4px 0' }} />
                 ) : (
                     <button
                         key={i}
-                        className={`context-menu-item ${item.danger ? 'context-menu-item--danger' : ''}`}
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             if (!item.disabled) {
                                 close();
                                 item.onClick();
                             }
                         }}
                         disabled={item.disabled}
+                        className={item.danger ? 'am-menu-item am-menu-item--danger' : 'am-menu-item'}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            width: '100%', padding: '7px 8px',
+                            font: 'var(--axi-t-label)', textAlign: 'left',
+                        }}
                     >
-                        {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+                        {item.icon && <span style={{ display: 'inline-flex' }}>{item.icon}</span>}
                         {item.label}
                     </button>
                 )
