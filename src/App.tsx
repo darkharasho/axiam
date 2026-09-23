@@ -860,23 +860,22 @@ function App() {
                         {accountsLoading ? (
                             <SkeletonCards count={3} />
                         ) : accounts.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full empty-state">
-                                <div className="empty-state-icon mb-4">
-                                    <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center">
-                                        <Plus size={28} className="text-[var(--theme-text-dim)]" />
-                                    </div>
+                            <div className="flex flex-col items-center justify-center h-full">
+                                <div className="axi-panel flex flex-col items-center gap-3 text-center" style={{ ['--axi-panel-pad' as string]: '20px' }}>
+                                    <p className="axi-eyebrow" style={{ margin: 0 }}>No accounts yet</p>
+                                    <button
+                                        onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
+                                        className="axi-btn axi-btn--dashed"
+                                    >
+                                        <Plus size={16} /> Add your first account
+                                    </button>
                                 </div>
-                                <p className="text-sm text-[var(--theme-text-dim)] mb-4 font-light">No accounts yet</p>
-                                <button
-                                    onClick={() => { setEditingAccount(undefined); setIsAddModalOpen(true); }}
-                                    className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2"
-                                >
-                                    <Plus size={16} /> Add Account
-                                </button>
                             </div>
                         ) : filteredAccounts.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-dim)]">
-                                <p className="text-sm font-light">No matching accounts</p>
+                            <div className="flex flex-col items-center justify-center h-full">
+                                <div className="axi-panel text-center" style={{ ['--axi-panel-pad' as string]: '20px' }}>
+                                    <p className="axi-eyebrow" style={{ margin: 0 }}>No matching accounts</p>
+                                </div>
                             </div>
                         ) : (
                             filteredAccounts.map((account, index) => (
