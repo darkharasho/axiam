@@ -10,7 +10,7 @@ import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
 import { Plus, Settings, Minus, Square, X, Sparkles, Search, Palette } from 'lucide-react';
 import SkeletonCards from './components/SkeletonCards.tsx';
-import { ACCENTS } from './themes/accents';
+import { ACCENTS, DEFAULT_ACCENT_ID } from './themes/accents';
 import { ContextMenuContainer } from './components/ContextMenu.tsx';
 import Tooltip from './components/Tooltip.tsx';
 
@@ -117,7 +117,7 @@ function App() {
     const [dragOverIndex, setDragOverIndex] = useState(-1);
     const dragSourceIndex = useRef(-1);
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const [currentThemeId, setCurrentThemeId] = useState('blood_legion');
+    const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_ACCENT_ID);
     const [, setMaximized] = useState(false);
 
     useEffect(() => {
@@ -135,9 +135,11 @@ function App() {
             setIsShowcaseMode(false);
         });
         window.api.getSettings().then((settings) => {
-            const themeId = settings?.themeId || 'blood_legion';
-            applyTheme(themeId);
-            setCurrentThemeId(themeId);
+            // Legacy pre-redesign installs persisted a GW2-lore theme id
+            // (e.g. `charr_warband`); applyTheme resolves it and returns the
+            // resolved ACCENTS id, so state never holds a stale raw id.
+            const resolved = applyTheme(settings?.themeId);
+            setCurrentThemeId(resolved);
         });
         checkMasterPassword().finally(() => setIsAuthChecking(false));
     }, []);
