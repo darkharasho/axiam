@@ -11,8 +11,8 @@ export interface ProtonPathsFs {
  * Given a list of Steam library paths, return the first one that contains
  * `steamapps/compatdata/<GW2 app id>`, or null if none do.
  *
- * Used by both `localDat.ts` (to find the host Local.dat) and `mutexCloser.ts`
- * (to find the Proton prefix). Pure function — no I/O outside the injected fs.
+ * Used by `localDat.ts` (to find the host Local.dat). Pure function — no I/O
+ * outside the injected fs.
  */
 export function resolveGw2CompatDataDir(
   steamLibraryPaths: string[],

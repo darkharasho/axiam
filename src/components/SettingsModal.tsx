@@ -319,11 +319,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
                     </div>
                 </div>
 
-                {/* Experimental — Windows only. The DLL-injection-based
-                   per-account-credentials strategy is implemented for
-                   Win32 Gw2-64.exe; Linux/Proton needs a different
-                   approach (Wine DLL overrides, WINE_OVERRIDES, or a
-                   Wine-aware shim) that we haven't tackled yet. */}
+                {/* Experimental — Windows only. */}
                 {window.api.platform === 'win32' && (
                     <div style={sectionRuleStyle}>
                         <div className="axi-eyebrow">Experimental</div>
@@ -382,10 +378,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
                         Enable multi-instance launches?
                     </h4>
                     <p style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginBottom: 12 }}>
-                        AxiAM will close a kernel object inside the running GW2 process so a
-                        second client can start, and inject a small library into each
-                        Gw2-64.exe that redirects credential reads to a per-account file —
-                        the same techniques used by Gw2Launcher for over a decade.
+                        AxiAM will launch additional Guild Wars 2 clients alongside the one
+                        already running, each with its own per-account credentials.
                     </p>
                     <p style={{ font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginBottom: 16 }}>
                         Tolerated by ArenaNet but not officially endorsed. The first launch

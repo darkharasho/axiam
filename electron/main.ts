@@ -13,9 +13,8 @@ import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { buildManagedLaunchArgs } from './launchArgs.js';
-import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount, getAccountLocalDatPath, seedAccountLocalDatFromHost } from './localDat.js';
-import { injectDll } from './dllInjector.js';
-import { migrateGw2DirToJunction, repointJunction, unmigrateJunctionToRealDir } from './junction.js';
+import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount } from './localDat.js';
+import { migrateGw2DirToJunction, repointJunction } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
 import {
   gw2DatPath,
@@ -30,13 +29,6 @@ import {
   type StabilityConfig,
 } from './patchDetector.js';
 import { quitWatcher } from './quitWatcher.js';
-import {
-  getHelperPath,
-  runMutexCloserDirect,
-  runMutexCloserUnderProton,
-  resolveProtonContext,
-  type MutexCloserResult,
-} from './mutexCloser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -781,46 +773,6 @@ async function runPatcher(id: string, installDir: string): Promise<'done' | 'pro
   return verdict;
 }
 
-function closeAnyExistingGw2Mutex(existingPidCount: number): MutexCloserResult {
-  const helperPath = getHelperPath();
-  if (!fs.existsSync(helperPath)) {
-    return { ok: false, closedCount: 0, reason: `helper binary not found at ${helperPath}` };
-  }
-  if (process.platform === 'win32') {
-    logMain('launch', `[mutex] Running mutex-closer against ${existingPidCount} existing GW2 process(es)`);
-    return runMutexCloserDirect(helperPath);
-  }
-  if (process.platform === 'linux') {
-    const home = os.homedir();
-    const libraryPaths = getSteamLibraryPaths();
-    // Ensure default library is checked even if libraryfolders.vdf missed it.
-    const defaultLib = path.join(home, '.local', 'share', 'Steam');
-    const allLibs = libraryPaths.includes(defaultLib) ? libraryPaths : [defaultLib, ...libraryPaths];
-    const ctx = resolveProtonContext(
-      home,
-      allLibs,
-      {
-        existsSync: fs.existsSync,
-        readFileSync: (p, enc) => fs.readFileSync(p, enc ?? 'utf-8') as string,
-        readdirSync: (p) => fs.readdirSync(p) as string[],
-      },
-      () => {
-        try {
-          return spawnSync('ps', ['-eo', 'args='], { encoding: 'utf8' }).stdout || '';
-        } catch {
-          return '';
-        }
-      },
-    );
-    if (!ctx) {
-      return { ok: false, closedCount: 0, reason: 'could not resolve a Steam Proton install for Guild Wars 2' };
-    }
-    logMain('launch', `[mutex] Running mutex-closer under Proton (${ctx.protonPath})`);
-    return runMutexCloserUnderProton(helperPath, ctx);
-  }
-  return { ok: false, closedCount: 0, reason: `mutex closing not supported on platform ${process.platform}` };
-}
-
 async function waitForAccountProcess(
   accountId: string,
   timeoutMs = 25000,
@@ -1381,40 +1333,10 @@ app.on('ready', () => {
   // Junction migration (Windows + opt-in flag). Idempotent: subsequent runs
   // detect the existing junction and no-op. Refuses to migrate while GW2 is
   // running so we don't yank a directory out from under live file handles.
-  //
-  // The DLL-redirect flag takes precedence: if it's on we un-migrate the
-  // junction (or no-op if there isn't one) so the host appdata path is a
-  // real directory again. The DLL-redirect strategy needs a shared real
-  // directory at hostPath because the launcher's update check coordinates
-  // across all instances through it.
   if (process.platform === 'win32') {
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     const appData = process.env.APPDATA;
-    if (settings.allowMultiInstance) {
-      if (!appData) {
-        logMainWarn('startup', '[dll-redirect] APPDATA env var missing; cannot un-migrate junction');
-      } else {
-        const hostPath = path.join(appData, 'Guild Wars 2');
-        const defaultProfileDir = path.join(
-          app.getPath('userData'),
-          'default-gw2-state',
-          'Guild Wars 2',
-        );
-        try {
-          const result = unmigrateJunctionToRealDir({
-            hostPath,
-            defaultProfileDir,
-            isGw2Running: () => getAllRunningGw2Pids().length > 0,
-          });
-          logMain('startup', `[dll-redirect] un-junction: ${result.status} (${result.movedFiles} files)`);
-          if (result.status === 'refused-gw2-running' && mainWindow) {
-            mainWindow.webContents.send('junction-migration-deferred');
-          }
-        } catch (err: any) {
-          logMainError('startup', `[dll-redirect] un-junction failed: ${err?.message ?? err}`);
-        }
-      }
-    } else if (settings.junctionMultiInstance) {
+    if (settings.junctionMultiInstance) {
       if (!appData) {
         logMainWarn('startup', '[junction] APPDATA env var missing; cannot migrate');
       } else {
@@ -1468,17 +1390,7 @@ app.on('ready', () => {
       launchStateMachine.setState(accountId, 'stopped', 'verified', 'Process exited');
     }
 
-    // DLL-redirect mode (implicit under allowMultiInstance on Windows):
-    // GW2's every Local.dat open was rewritten to the per-account file
-    // in-process, so the host file never held this account's data.
-    // Nothing to copy back.
-    // DLL-redirect only exists on Windows multi-instance; this guard never
-    // matches on Linux, so Linux falls through to the snapshot-back below.
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
-    if (process.platform === 'win32' && settings.allowMultiInstance) {
-      logMain('snapshot', `[dll-redirect] account=${accountId} quit; state already written in-place to profile`);
-      return;
-    }
     // Junction mode: GW2 wrote in place into the account's profile dir via
     // the repointed junction, so there's nothing to snapshot back.
     if (settings.junctionMultiInstance) {
@@ -1946,14 +1858,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
 
   const launchSettings = (store.get('settings') as { gw2Path?: string; allowMultiInstance?: boolean; junctionMultiInstance?: boolean } | undefined) || {};
   let gw2Path = launchSettings?.gw2Path?.trim();
-  // Multi-instance implies per-account DLL redirect on Windows. The
-  // DLL redirect is the only strategy that actually delivers
-  // concurrent multi-launch — take-2 and take-3 both fail with
-  // "Download failed (5)" on the second client — so tying the two
-  // together removes a foot-gun: no way to enable multi-instance and
-  // unwittingly stay on the broken path.
-  const useDllRedirect = process.platform === 'win32' && launchSettings.allowMultiInstance === true;
-  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true && !useDllRedirect;
+  const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true;
 
   if (gw2Path && !fs.existsSync(gw2Path)) {
     console.error(`GW2 path does not exist: ${gw2Path}`);
@@ -1972,7 +1877,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
     }
   }
 
-  // Multi-instance gate + mutex preparation.
+  // Multi-instance gate.
   const existingGw2Pids = getAllRunningGw2Pids();
   if (existingGw2Pids.length > 0) {
     if (!launchSettings.allowMultiInstance) {
@@ -1985,19 +1890,6 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
       );
       return false;
     }
-    const mutexResult = closeAnyExistingGw2Mutex(existingGw2Pids.length);
-    if (!mutexResult.ok) {
-      logMainError('launch', `[mutex] ${mutexResult.reason}`);
-      launchStateMachine.setState(
-        id,
-        'errored',
-        'verified',
-        `Couldn't prepare GW2 for multi-instance launch: ${mutexResult.reason}`,
-      );
-      return false;
-    }
-    logMain('launch', `[mutex] Closed AN-Mutex on ${mutexResult.closedCount} existing GW2 process(es)`);
-
     // Give the already-running instance time to finish its patcher / update
     // check before spawning ours. Without this wait the second instance hits
     // "Download failed (5)" on the splash screen because both clients race
@@ -2015,33 +1907,8 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
   // Per-account autologin: install the account's Local.dat at the host path
   // (or re-point the junction at the account's profile dir under junction
   // mode) before spawn so GW2 reads this account's saved credentials.
-  //
-  // Under dllRedirectMultiInstance, no host-path manipulation is needed:
-  // the injected DLL rewrites every NtCreateFile of Local.dat to the
-  // per-account file directly. The profile dir still needs to exist (so
-  // the DLL has somewhere to write to on first save) but otherwise this
-  // whole block is a no-op for the redirect mode.
   let useAutologin = hasLocalDat(account.id);
-  if (useDllRedirect) {
-    const profileDir = path.dirname(getAccountLocalDatPath(account.id));
-    if (!fs.existsSync(profileDir)) {
-      fs.mkdirSync(profileDir, { recursive: true });
-    }
-    // Seed the per-account Local.dat from the host file if this account
-    // is new. Local.dat carries ~70MB of patcher cache in addition to
-    // credentials — without that cache the launcher refuses to progress.
-    const seedResult = seedAccountLocalDatFromHost(account.id);
-    if (seedResult.ok) {
-      // hasLocalDat() was evaluated above against the snapshot path; if
-      // we just seeded a copy of the host file the redirect target now
-      // contains creds (possibly another account's, but valid). -autologin
-      // will pre-fill those; the user re-logs once and they get overwritten.
-      useAutologin = true;
-      logMain('launch', `[dll-redirect] account=${id} seeded profile Local.dat from host; redirect armed`);
-    } else {
-      logMainWarn('launch', `[dll-redirect] account=${id} seed skipped (${seedResult.reason}); launcher may need to rebuild its cache`);
-    }
-  } else if (useJunction) {
+  if (useJunction) {
     const appData = process.env.APPDATA;
     const hostPath = appData ? path.join(appData, 'Guild Wars 2') : null;
     const profileDir = path.join(
@@ -2149,29 +2016,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
   try {
     // On Linux, always launch via Steam so Proton handles the Windows executable
     // correctly (DXVK, DLL overrides for addons like ArcDPS/Nexus, etc.)
-    if (gw2Path && process.platform !== 'linux' && useDllRedirect) {
-      // Inject-and-spawn path. The injector returns the child PID
-      // synchronously, so we pre-bind it to the account ID — that means
-      // waitForAccountProcess finds the binding immediately instead of
-      // having to discover it via WMI / mumble link.
-      const gw2WorkingDirectory = path.dirname(gw2Path);
-      const localDatPath = getAccountLocalDatPath(account.id);
-      logMain('launch', `Launching account=${id} via DLL-injected direct executable with ${args.length} args`);
-      const injectResult = injectDll({
-        exe: gw2Path,
-        cwd: gw2WorkingDirectory,
-        localDat: localDatPath,
-        childArgs: args,
-      });
-      if (!injectResult.ok || typeof injectResult.pid !== 'number') {
-        logMainError('launch', `[dll-redirect] inject failed for account=${id}: ${injectResult.reason ?? 'unknown'}`);
-        launchStateMachine.setState(id, 'errored', 'verified', `Inject-and-spawn failed: ${injectResult.reason ?? 'unknown'}`);
-        return false;
-      }
-      logMain('launch', `[dll-redirect] account=${id} injected and resumed; pid=${injectResult.pid}`);
-      manualAccountPidBindings.set(id, injectResult.pid);
-      launchStateMachine.setState(id, 'launcher_started', 'verified', 'DLL-injected direct executable launched');
-    } else if (gw2Path && process.platform !== 'linux') {
+    if (gw2Path && process.platform !== 'linux') {
       console.log('Launching direct executable:', args.join(' '));
       logMain('launch', `Launching account=${id} via direct executable with ${args.length} args`);
       const gw2WorkingDirectory = path.dirname(gw2Path);
@@ -2234,7 +2079,7 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
         void monitorPatchCrashAndRecover(id, gw2Path, boundPid, launchStartMs);
       }
     }
-    if (process.platform === 'win32' && !useJunction && !useDllRedirect) {
+    if (process.platform === 'win32' && !useJunction) {
       logMain('launch', `[dwell] account=${id} waiting ${LAUNCH_DWELL_AFTER_DETECTED_MS}ms for GW2 to consume Local.dat before releasing launch serializer`);
       await new Promise((resolve) => setTimeout(resolve, LAUNCH_DWELL_AFTER_DETECTED_MS));
     }
