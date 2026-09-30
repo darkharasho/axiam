@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { ACCENTS, DEFAULT_ACCENT_ID, resolveAccentId } from './accents';
 
 describe('the accent list', () => {
-    it('is the eleven official accents', () => {
-        expect(ACCENTS).toHaveLength(11);
+    it('is the twelve official accents', () => {
+        expect(ACCENTS).toHaveLength(12);
         expect(ACCENTS.map((a) => a.id)).toContain('crimson-red');
         expect(ACCENTS[0].id).toBe('axi-gold');
     });
