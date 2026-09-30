@@ -48,6 +48,7 @@ const store = new Store<StoreSchema>({
             gw2Path: '',
             masterPasswordPrompt: 'every_time',
             themeId: 'crimson-red',
+            surfaceId: 'axi',
         },
         windowState: {
             width: 400,

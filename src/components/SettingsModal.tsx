@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Github } from 'lucide-react';
 import { ACCENTS, DEFAULT_ACCENT_ID, resolveAccentId } from '../themes/accents';
-import { applyTheme } from '../themes/applyTheme';
+import { applyTheme, applySurface, resolveSurfaceId, SURFACES, DEFAULT_SURFACE_ID } from '../themes/applyTheme';
+import type { SurfaceId } from '../themes/applyTheme';
 import { showToast } from './Toast.tsx';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     onThemeChange?: (id: string) => void;
+    onSurfaceChange?: (id: string) => void;
 }
 
 type SettingsPayload = {
     gw2Path: string;
     masterPasswordPrompt: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId: string;
+    surfaceId: string;
     allowMultiInstance: boolean;
 };
 
@@ -23,13 +26,14 @@ const EXIT_MS = 300;
 const hintStyle: React.CSSProperties = { font: 'var(--axi-t-small)', color: 'var(--axi-text-dim)', marginTop: 6 };
 const sectionRuleStyle: React.CSSProperties = { borderTop: 'var(--axi-border-control) solid var(--axi-rule)', paddingTop: 16 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeChange, onSurfaceChange }) => {
     const [visible, setVisible] = useState(false);
     const [closing, setClosing] = useState(false);
     const [gw2Path, setGw2Path] = useState('');
     const [isLocatingGw2Path, setIsLocatingGw2Path] = useState(false);
     const [masterPasswordPrompt, setMasterPasswordPrompt] = useState<'every_time' | 'daily' | 'weekly' | 'monthly' | 'never'>('every_time');
     const [themeId, setThemeId] = useState(DEFAULT_ACCENT_ID);
+    const [surfaceId, setSurfaceId] = useState<SurfaceId>(DEFAULT_SURFACE_ID);
     const [allowMultiInstance, setAllowMultiInstance] = useState<boolean>(false);
     const [showMultiInstanceConfirm, setShowMultiInstanceConfirm] = useState<boolean>(false);
     const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
@@ -61,6 +65,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
         gw2Path,
         masterPasswordPrompt,
         themeId,
+        surfaceId,
         allowMultiInstance,
     });
 
@@ -107,11 +112,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
                 // (e.g. `charr_warband`); route hydration through
                 // resolveAccentId so state always holds a valid ACCENTS id.
                 themeId: resolveAccentId(settings?.themeId),
+                surfaceId: resolveSurfaceId(settings?.surfaceId),
                 allowMultiInstance: settings?.allowMultiInstance ?? false,
             };
             setGw2Path(normalized.gw2Path);
             setMasterPasswordPrompt(normalized.masterPasswordPrompt);
             setThemeId(normalized.themeId);
+            setSurfaceId(resolveSurfaceId(normalized.surfaceId));
             setAllowMultiInstance(normalized.allowMultiInstance);
             const snapshot = JSON.stringify(normalized);
             lastSavedSnapshotRef.current = snapshot;
@@ -147,6 +154,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
         gw2Path,
         masterPasswordPrompt,
         themeId,
+        surfaceId,
         allowMultiInstance,
     ]);
 
@@ -278,6 +286,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onThemeC
                     <p style={hintStyle}>
                         {ACCENTS.find((a) => a.id === themeId)?.label}
                     </p>
+                </div>
+
+                {/* Surface */}
+                <div>
+                    <div className="axi-eyebrow">Surface</div>
+                    <div className="flex flex-wrap gap-2">
+                        {SURFACES.map((s) => (
+                            <button
+                                key={s.id}
+                                type="button"
+                                aria-pressed={s.id === surfaceId}
+                                className={`axi-btn axi-btn--sm${s.id === surfaceId ? ' axi-btn--primary' : ''}`}
+                                onClick={() => { setSurfaceId(s.id); applySurface(s.id); onSurfaceChange?.(s.id); }}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Diagnostics */}
