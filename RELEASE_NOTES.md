@@ -1,5 +1,24 @@
 # Release Notes
 
+Version v1.4.0 — October 1, 2026
+
+## Pick how AxiAM looks
+
+Settings has a new **Surface** control beside the accent picker, with three choices. **Axi** is what AxiAM has always looked like — flat and outlined, square corners, hard offset blocks instead of blurred shadows — and it stays the default. **Flat** keeps those shapes but rounds the corners and uses real shadows. **Glass** makes panels translucent, with depth and blur behind them.
+
+Your choice sticks between launches and repaints the whole app at once.
+
+## The Windows helper binaries are gone
+
+AxiAM no longer ships `axiam-injector.exe`, `axiam-mutex-closer.exe` or `axiam_local_dat_redirect.dll`. The experimental DLL-injection route to per-account credentials never worked outside Win32 and had stopped being used, so it has been removed along with the code that called it. The installer is smaller for it.
+
+**Allow multiple GW2 instances** still works exactly as before, and so does junction mode — neither depended on those helpers. The only thing that changed is the explanatory text under the toggle, which used to describe mutex closing and DLL injection that no longer happen.
+
+## Fixes
+
+- On Flat and Glass the window's rounded corners are now actually round; the page used to paint square corners over them.
+- Buttons that came out with a black background on the new surfaces are drawn in the right token now.
+
 Version v1.3.1 — September 23, 2026
 
 ## Fixes
