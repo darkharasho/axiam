@@ -88,10 +88,15 @@ body { margin: 0; overflow: hidden; user-select: none; }
     border: var(--axi-border-hairline) solid var(--axi-ink-line);
     transition: transform .1s ease, box-shadow .1s ease, color .1s ease;
 }
+/* The lift asks for the composed block token, not a hand-assembled one: a
+   theme restates --axi-shadow-* to say what "raised" looks like in its own
+   material (flat/glass trade the hard step for a soft drop), so composing it
+   from --axi-offset-* here would have pinned this control to the default
+   theme's relief. The translate stays either way. */
 .am-rail-btn:hover {
     color: var(--axi-text);
     transform: translate(-2px, -2px);
-    box-shadow: var(--axi-offset-control) var(--axi-offset-control) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control);
 }
 .am-rail-btn--accent {
     background: var(--axi-accent);
@@ -147,16 +152,18 @@ body { margin: 0; overflow: hidden; user-select: none; }
 
 /* --- account cards --- */
 
+/* Resting and hover relief come from the composed --axi-shadow-* tokens so the
+   card wears whichever material the active theme defines (see .am-rail-btn). */
 .am-card {
     position: relative;
     background: var(--axi-surface);
     border: var(--axi-border-control) solid var(--axi-ink-line);
-    box-shadow: var(--axi-offset-control) var(--axi-offset-control) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control);
     transition: transform .1s ease, box-shadow .1s ease;
 }
 .am-card:hover {
     transform: translate(-2px, -2px);
-    box-shadow: var(--axi-offset-control-hover) var(--axi-offset-control-hover) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control-hover);
 }
 
 /* Running is asserted with a top status cap (rule 5), never a stripe/glow. */
