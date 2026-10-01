@@ -11,6 +11,16 @@
 html, body, #root { height: 100%; }
 body { margin: 0; overflow: hidden; user-select: none; }
 
+/* The window itself is transparent (see createWindow in electron/main.ts), so
+   .axi-window is the only thing that paints: it carries the ground, the outline
+   and the radius, and its shape is the shape the window should be. The package
+   also paints <body> with the ground, which is right for a page in a browser and
+   wrong for a window shell - body has no radius, so it fills the corners back in
+   behind the shell and the rounding disappears. Longhands rather than the
+   shorthand, so the colour, font and background-attachment the package sets on
+   the same rule are left alone. */
+html, body { background-color: transparent; background-image: none; }
+
 /* A frameless window has nothing behind it for a block to fall onto, so the
    window's offset block is drawn inward (the axiom pattern). */
 .axi-window {
@@ -47,6 +57,9 @@ body { margin: 0; overflow: hidden; user-select: none; }
 
 /* --- scrollbars --- */
 
+/* The track keeps --axi-ground deliberately: it is a channel cut through the
+   content back to the page, not a control, so the page colour is the honest
+   fill for it under every theme. The thumb is the control and wears a surface. */
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: var(--axi-ground); }
 ::-webkit-scrollbar-thumb {
@@ -83,15 +96,25 @@ body { margin: 0; overflow: hidden; user-select: none; }
     height: 30px;
     display: grid;
     place-items: center;
-    background: var(--axi-ground);
+    /* A raised control, not a recess: it lifts and gains a block on hover, and
+       its --accent sibling below is a saturated plate. So it wears
+       --axi-surface-raised, not --axi-well-fill. It cannot wear --axi-ground
+       (as it did): the page colour is opaque under every theme, which painted
+       each chevron/gear as a solid black tile on a translucent card. */
+    background: var(--axi-surface-raised);
     color: var(--axi-text-dim);
     border: var(--axi-border-hairline) solid var(--axi-ink-line);
     transition: transform .1s ease, box-shadow .1s ease, color .1s ease;
 }
+/* The lift asks for the composed block token, not a hand-assembled one: a
+   theme restates --axi-shadow-* to say what "raised" looks like in its own
+   material (flat/glass trade the hard step for a soft drop), so composing it
+   from --axi-offset-* here would have pinned this control to the default
+   theme's relief. The translate stays either way. */
 .am-rail-btn:hover {
     color: var(--axi-text);
     transform: translate(-2px, -2px);
-    box-shadow: var(--axi-offset-control) var(--axi-offset-control) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control);
 }
 .am-rail-btn--accent {
     background: var(--axi-accent);
@@ -137,26 +160,32 @@ body { margin: 0; overflow: hidden; user-select: none; }
     color: var(--axi-text-faint);
     cursor: default;
 }
-/* The pop's own background is --axi-surface-raised, so hover must step to
-   ground (the package's .axi-menu__pop label:hover pattern) to be visible. */
-.am-menu-item:hover:not(:disabled) { background: var(--axi-ground); color: var(--axi-text); }
+/* A hovered row sinks into the pop rather than stepping to the page colour:
+   --axi-well-fill is the recess fill (the package's current
+   .axi-menu__pop label:hover pattern, and the pop is --axi-surface-float now,
+   not --axi-surface-raised). --axi-ground would have been an opaque black row
+   inside a translucent popover. The danger row is a status fill, so its ink is
+   --axi-ink-on-fill; --axi-accent-ink is only for the accent fill. */
+.am-menu-item:hover:not(:disabled) { background: var(--axi-well-fill); color: var(--axi-text); }
 .am-menu-item--danger:hover:not(:disabled) {
     background: var(--axi-danger);
-    color: var(--axi-accent-ink);
+    color: var(--axi-ink-on-fill);
 }
 
 /* --- account cards --- */
 
+/* Resting and hover relief come from the composed --axi-shadow-* tokens so the
+   card wears whichever material the active theme defines (see .am-rail-btn). */
 .am-card {
     position: relative;
     background: var(--axi-surface);
     border: var(--axi-border-control) solid var(--axi-ink-line);
-    box-shadow: var(--axi-offset-control) var(--axi-offset-control) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control);
     transition: transform .1s ease, box-shadow .1s ease;
 }
 .am-card:hover {
     transform: translate(-2px, -2px);
-    box-shadow: var(--axi-offset-control-hover) var(--axi-offset-control-hover) 0 var(--axi-ink-line);
+    box-shadow: var(--axi-shadow-control-hover);
 }
 
 /* Running is asserted with a top status cap (rule 5), never a stripe/glow. */

@@ -5,7 +5,7 @@ import AddAccountModal from './components/AddAccountModal.tsx';
 import MasterPasswordModal from './components/MasterPasswordModal.tsx';
 import SettingsModal from './components/SettingsModal.tsx';
 import WhatsNewScreen from './components/WhatsNewScreen.tsx';
-import { applyTheme } from './themes/applyTheme';
+import { applyTheme, applySurface } from './themes/applyTheme';
 import { showToast, ToastContainer } from './components/Toast.tsx';
 import { withTimeout } from './ipcTimeout';
 import { Plus, Settings, Minus, Square, X, Sparkles, Search, Palette } from 'lucide-react';
@@ -137,6 +137,7 @@ function App() {
             // (e.g. `charr_warband`); applyTheme resolves it and returns the
             // resolved ACCENTS id, so state never holds a stale raw id.
             const resolved = applyTheme(settings?.themeId);
+            applySurface(settings?.surfaceId);
             setCurrentThemeId(resolved);
         });
         checkMasterPassword().finally(() => setIsAuthChecking(false));
@@ -758,6 +759,12 @@ function App() {
         });
     };
 
+    const persistSurface = (id: string) => {
+        window.api.getSettings().then((settings) => {
+            window.api.saveSettings({ ...settings, surfaceId: id } as any);
+        });
+    };
+
     return (
         <div className="axi-window">
             <TitleBar
@@ -919,6 +926,7 @@ function App() {
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 onThemeChange={setCurrentThemeId}
+                onSurfaceChange={persistSurface}
             />
 
             {isWhatsNewOpen && (

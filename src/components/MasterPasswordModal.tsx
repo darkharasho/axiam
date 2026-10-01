@@ -23,7 +23,10 @@ const MasterPasswordModal: React.FC<MasterPasswordModalProps> = ({ mode, onSubmi
     return (
         <div
             className="flex-1 flex flex-col items-center justify-center p-6"
-            style={{ background: 'var(--axi-ground)' }}
+            // This pane IS the page while the vault is locked, so it paints the
+            // ground as two longhands: the `background` shorthand would reset
+            // background-image to none and throw away a theme's atmosphere.
+            style={{ backgroundColor: 'var(--axi-ground)', backgroundImage: 'var(--axi-ground-image)' }}
         >
             <div className="axi-panel flex flex-col items-center" style={{ maxWidth: 320, width: '100%' }}>
                 <div

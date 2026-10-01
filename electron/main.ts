@@ -2209,6 +2209,7 @@ ipcMain.handle('save-settings', async (_, settings) => {
     gw2Path?: string;
     masterPasswordPrompt?: 'every_time' | 'daily' | 'weekly' | 'monthly' | 'never';
     themeId?: string;
+    surfaceId?: string;
   } | undefined) || {};
   const { linuxInputAuthorizationPrewarmAttempted: _drop, ...cleanSettings } = existingSettings as Record<string, unknown>;
   store.set('settings', { ...cleanSettings, ...settings });
@@ -2228,6 +2229,7 @@ ipcMain.handle('get-settings', async () => {
       gw2Path: '/usr/bin/gw2-showcase',
       masterPasswordPrompt: 'never',
       themeId: 'blood_legion',
+      surfaceId: 'axi',
     };
   }
   return store.get('settings');

@@ -58,7 +58,10 @@ const BirthdayGiftIcon: React.FC = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="3" y="10" width="18" height="10" fill="var(--axi-accent)" />
         <rect x="3" y="7" width="18" height="4" fill="var(--axi-warn)" />
-        <rect x="11" y="7" width="2" height="13" fill="var(--axi-ink-line)" />
+        {/* The ribbon is drawn ON the accent/warn fills, so it is --axi-ink-on-fill
+            (the fill ink), not --axi-ink-line (the outline ink, which flat and
+            glass relight to a translucent white that would wash out here). */}
+        <rect x="11" y="7" width="2" height="13" fill="var(--axi-ink-on-fill)" />
         <path d="M12 7C12 5.2 13.4 4 15 4C15.9 4 16.7 4.4 17.2 5.1C17.7 5.8 17.9 6.7 17.7 7H12Z" fill="var(--axi-accent)" />
         <path d="M12 7C12 5.2 10.6 4 9 4C8.1 4 7.3 4.4 6.8 5.1C6.3 5.8 6.1 6.7 6.3 7H12Z" fill="var(--axi-accent)" />
     </svg>
