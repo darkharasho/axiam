@@ -11,6 +11,16 @@
 html, body, #root { height: 100%; }
 body { margin: 0; overflow: hidden; user-select: none; }
 
+/* The window itself is transparent (see createWindow in electron/main.ts), so
+   .axi-window is the only thing that paints: it carries the ground, the outline
+   and the radius, and its shape is the shape the window should be. The package
+   also paints <body> with the ground, which is right for a page in a browser and
+   wrong for a window shell - body has no radius, so it fills the corners back in
+   behind the shell and the rounding disappears. Longhands rather than the
+   shorthand, so the colour, font and background-attachment the package sets on
+   the same rule are left alone. */
+html, body { background-color: transparent; background-image: none; }
+
 /* A frameless window has nothing behind it for a block to fall onto, so the
    window's offset block is drawn inward (the axiom pattern). */
 .axi-window {
