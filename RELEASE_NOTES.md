@@ -1,5 +1,11 @@
 # Release Notes
 
+Version v1.4.1 — October 4, 2026
+
+## Fixes
+
+- Multi-word labels in the title bar chips, like "UP TO DATE", no longer wrap onto a second line.
+
 Version v1.4.0 — October 1, 2026
 
 ## Pick how AxiAM looks
