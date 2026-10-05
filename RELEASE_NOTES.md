@@ -1,5 +1,11 @@
 # Release Notes
 
+Version v1.4.2 — October 4, 2026
+
+## Fixes
+
+- Title bar chip labels stay on one line everywhere in the app, not just in the title bar. The shared chip style now keeps its labels from wrapping.
+
 Version v1.4.1 — October 4, 2026
 
 ## Fixes
