@@ -37,9 +37,6 @@ html, body { background-color: transparent; background-image: none; }
 .axi-titlebar .axi-chip {
     padding: 1px 7px;
     gap: 5px;
-    /* The chip is a flex item in a strip that can run out of room; without
-       this it shrinks to its widest word and "UP TO DATE" breaks in two. */
-    white-space: nowrap;
 }
 
 /* The package buttons align their svg glyphs on the text baseline, which
