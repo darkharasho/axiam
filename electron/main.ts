@@ -29,6 +29,7 @@ import {
   type StabilityConfig,
 } from './patchDetector.js';
 import { quitWatcher } from './quitWatcher.js';
+import { startAccess, type AccessBoot } from './access.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -181,6 +182,13 @@ let autoUpdateEnabled = false;
 const isDevFakeUpdate = process.env.AXIAM_DEV_FAKE_UPDATE === '1';
 const isDevFakeWhatsNew = process.env.AXIAM_DEV_FAKE_WHATS_NEW === '1' || isDevFakeUpdate;
 const isDevShowcase = process.env.AXIAM_DEV_SHOWCASE === '1';
+
+// Access check state (see access.ts). When blockedAtBoot is set, nothing else starts.
+let access: AccessBoot | null = null;
+let blockedAtBoot = false;
+const recheckAccess = () => {
+  if (access && !access.blocked) void access.gate.recheck();
+};
 let fakeUpdateTimer: NodeJS.Timeout | null = null;
 const showcaseActiveAccounts = new Set<string>();
 const showcaseAccounts = [
@@ -1294,7 +1302,18 @@ const createWindow = () => {
   }
 };
 
-app.on('ready', () => {
+app.on('ready', async () => {
+  access = await startAccess({
+    electron: { app, BrowserWindow, shell },
+    // @ts-ignore
+    readAccounts: () => (store.get('accounts') as Array<{ apiKey?: string; apiAccountName?: string }> | undefined) ?? [],
+    showcase: isDevShowcase,
+  });
+  if (access.blocked) {
+    blockedAtBoot = true;
+    return;
+  }
+
   // Migrate legacy per-account Local.dat snapshots into the per-profile layout
   // introduced in v1.1.14. Idempotent — re-runs at every startup but only acts
   // when there's actual legacy state to move.
@@ -1430,6 +1449,7 @@ app.on('ready', () => {
     app.setAppUserModelId('com.axiam.app');
   }
   createWindow();
+  recheckAccess();
 
   const updateConfigPath = path.join(process.resourcesPath, 'app-update.yml');
   const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE);
@@ -1463,6 +1483,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
+  if (blockedAtBoot) return;
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
@@ -1672,6 +1693,7 @@ ipcMain.handle('save-account', async (_, accountData) => {
   // @ts-ignore
   const accounts = (store.get('accounts') as any[]) || [];
   store.set('accounts', [...accounts, newAccount]);
+  recheckAccess();
   logMain('launch', `Saved account id=${id}`);
   return true;
 });
@@ -1765,6 +1787,7 @@ ipcMain.handle('set-account-api-profile', async (_, id, profile) => {
     apiCreatedAt: String(profile?.created || '').trim(),
   };
   store.set('accounts', accounts);
+  recheckAccess();
   return true;
 });
 
@@ -1795,6 +1818,7 @@ ipcMain.handle('update-account', async (_, id, accountData) => {
   };
 
   store.set('accounts', accounts);
+  recheckAccess();
   return true;
 });
 

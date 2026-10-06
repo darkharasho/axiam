@@ -119,7 +119,7 @@ Please keep PRs focused — one feature or fix per PR. If you're unsure about a 
 A: No. The master password is never stored and cannot be recovered. You'll need to reset app data and re-add your accounts.
 
 **Q: Does AxiAM store my credentials online?**
-A: No. All credentials are encrypted and stored locally on your machine. Nothing is transmitted to any server.
+A: No. All credentials are encrypted and stored locally on your machine. Account data and API keys are never sent anywhere except the official Guild Wars 2 API. The only other request AxiAM makes is the access-list download described under [Access](#access).
 
 **Q: Can I use AxiAM on Linux?**
 A: Yes. Point the GW2 path to a wrapper script that launches the game through Proton/Wine. The rest of the app works natively.
@@ -129,6 +129,10 @@ A: Check your internet connection and firewall settings. Updates are downloaded 
 
 **Q: Why does Windows SmartScreen warn me about the installer?**
 A: Unsigned builds trigger SmartScreen warnings. Official releases are code-signed to avoid this. If you built from source without a signing certificate, this is expected.
+
+## Access
+
+AxiAM checks a public access list when it starts and every few hours, by downloading `https://config.axi.link/v1/manifest`. Access to the Axi apps can be revoked for accounts, guilds or Discord servers that violate the terms of use. The list holds only one-way SHA-256 hashes, and the comparison happens on your device: AxiAM compares your vault's GW2 account names and guilds against it and never sends them, or anything else about you, anywhere. If the list can't be reached, AxiAM keeps working. If you believe your access was revoked by mistake, use the contact link on the block screen, or reach the author through https://github.com/darkharasho.
 
 ## License
 
