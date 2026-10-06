@@ -1,5 +1,15 @@
 # Release Notes
 
+Version v1.5.0 — October 5, 2026
+
+## Access check
+
+AxiAM now checks a public access list when it starts and every few hours. Access to the Axi apps can be revoked for accounts, guilds or Discord servers that violate the terms of use, and a revoked install shows a block screen instead of the app.
+
+The list is downloaded from `config.axi.link` and holds only one-way hashes. AxiAM checks your vault's GW2 account names and guilds against it on your device and never sends them anywhere. To find a key's account and guilds, it asks the official Guild Wars 2 API using that key.
+
+If the list can't be reached, AxiAM keeps working as before. The README has a new **Access** section that spells out exactly what is checked and how to appeal.
+
 Version v1.4.2 — October 4, 2026
 
 ## Fixes
