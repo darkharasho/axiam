@@ -65,9 +65,13 @@ beforeEach(() => {
   resetBlockScreenForTests();
 });
 
-afterEach(() => {
-  for (const c of configs.splice(0)) c.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+afterEach(async () => {
+  // Let any in-flight cache write settle before removing the directory.
+  for (const c of configs.splice(0)) {
+    await c.refresh();
+    c.close();
+  }
+  await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 });
 
 describe('access', () => {

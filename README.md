@@ -119,7 +119,7 @@ Please keep PRs focused — one feature or fix per PR. If you're unsure about a 
 A: No. The master password is never stored and cannot be recovered. You'll need to reset app data and re-add your accounts.
 
 **Q: Does AxiAM store my credentials online?**
-A: No. All credentials are encrypted and stored locally on your machine. Account data and API keys are never sent anywhere except the official Guild Wars 2 API. The only other request AxiAM makes is the access-list download described under [Access](#access).
+A: No. Passwords are encrypted and everything is stored locally on your machine. API keys are only sent to the official Guild Wars 2 API. Apart from update checks and release notes from GitHub, the only other request AxiAM makes is the access-list download described under [Access](#access).
 
 **Q: Can I use AxiAM on Linux?**
 A: Yes. Point the GW2 path to a wrapper script that launches the game through Proton/Wine. The rest of the app works natively.
@@ -132,7 +132,7 @@ A: Unsigned builds trigger SmartScreen warnings. Official releases are code-sign
 
 ## Access
 
-AxiAM checks a public access list when it starts and every few hours, by downloading `https://config.axi.link/v1/manifest`. Access to the Axi apps can be revoked for accounts, guilds or Discord servers that violate the terms of use. The list holds only one-way SHA-256 hashes, and the comparison happens on your device: AxiAM compares your vault's GW2 account names and guilds against it and never sends them, or anything else about you, anywhere. If the list can't be reached, AxiAM keeps working. If you believe your access was revoked by mistake, use the contact link on the block screen, or reach the author through https://github.com/darkharasho.
+AxiAM checks a public access list when it starts and every few hours, by downloading `https://config.axi.link/v1/manifest`. Access to the Axi apps can be revoked for accounts, guilds or Discord servers that violate the terms of use. The list holds only one-way SHA-256 hashes, and the comparison happens on your device: AxiAM compares your vault's GW2 account names and guilds against it and never sends them, or anything else about you, anywhere. To find a key's account and guilds, AxiAM asks the official Guild Wars 2 API (`/v2/account`) using that key; that is the only other request the check makes. If the list can't be reached, AxiAM keeps working. If you believe your access was revoked by mistake, use the contact link on the block screen, or reach the author through https://github.com/darkharasho.
 
 ## License
 

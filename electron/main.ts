@@ -1303,13 +1303,18 @@ const createWindow = () => {
 };
 
 app.on('ready', async () => {
-  access = await startAccess({
-    electron: { app, BrowserWindow, shell },
-    // @ts-ignore
-    readAccounts: () => (store.get('accounts') as Array<{ apiKey?: string; apiAccountName?: string }> | undefined) ?? [],
-    showcase: isDevShowcase,
-  });
-  if (access.blocked) {
+  try {
+    access = await startAccess({
+      electron: { app, BrowserWindow, shell },
+      // @ts-ignore
+      readAccounts: () => (store.get('accounts') as Array<{ apiKey?: string; apiAccountName?: string }> | undefined) ?? [],
+      showcase: isDevShowcase,
+    });
+  } catch {
+    // Fail open: a bug in the check must not take the app down.
+    console.warn('access check unavailable');
+  }
+  if (access?.blocked) {
     blockedAtBoot = true;
     return;
   }
