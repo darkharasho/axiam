@@ -1,5 +1,13 @@
 # Release Notes
 
+Version v1.5.2 — November 2, 2026
+
+## Fixes
+
+- You can now point the Guild Wars 2 path at the install folder (like `C:\Games\Guild Wars 2`) and AxiAM finds `Gw2-64.exe` inside it. AUTO LOCATE also tidies the saved setting to the full exe path.
+- Launching with a bad path now fails right away with "No GW2 executable at the configured path. Check the Guild Wars 2 path in Settings." Before, it just sat there for 90 seconds.
+- The background swirl on the lock screen no longer paints over the master password prompt.
+
 Version v1.5.1 — October 6, 2026
 
 ## Fixes
