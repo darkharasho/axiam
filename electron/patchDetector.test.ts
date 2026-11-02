@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { gw2DatPath, gw2ExePath, gw2CrashDumpPath, isPatchNeeded } from './patchDetector.js';
 import { isCrashDumpFresh, shouldAttemptPatchRecovery, patchActuallyRan } from './patchDetector.js';
-import { createStabilityState, stepStability } from './patchDetector.js';
+import { createStabilityState, stepStability, isPatchSignalDismissed } from './patchDetector.js';
 import type { StabilityConfig, StabilitySample } from './patchDetector.js';
 
 describe('patchDetector paths', () => {
@@ -165,5 +165,36 @@ describe('stepStability', () => {
     expect(r.verdict).toBe('pending');
     r = stepStability(r.state, sample(999, 999), 300_000, CONFIG);
     expect(r.verdict).toBe('timeout');
+  });
+});
+
+describe('isPatchSignalDismissed', () => {
+  // The field bug: a non-Steam install where Gw2-64.exe is permanently newer
+  // than Gw2.dat. The proactive patch run found nothing pending ('proceed'),
+  // which leaves both mtimes untouched — so without a dismissal record every
+  // launch re-runs the patcher, and its teardown kills whatever session the
+  // user started in the vanilla launcher.
+  it('dismisses the exact mtime pair a proceed-verdict patch run disproved', () => {
+    const dismissed = { exeMtimeMs: 2_000, datMtimeMs: 1_000 };
+    expect(isPatchSignalDismissed(dismissed, 2_000, 1_000)).toBe(true);
+  });
+
+  it('does not dismiss when nothing was recorded', () => {
+    expect(isPatchSignalDismissed(null, 2_000, 1_000)).toBe(false);
+    expect(isPatchSignalDismissed(undefined, 2_000, 1_000)).toBe(false);
+  });
+
+  it('re-arms when the exe mtime changes (a real Steam update)', () => {
+    const dismissed = { exeMtimeMs: 2_000, datMtimeMs: 1_000 };
+    expect(isPatchSignalDismissed(dismissed, 3_000, 1_000)).toBe(false);
+  });
+
+  it('re-arms when the dat mtime changes', () => {
+    const dismissed = { exeMtimeMs: 2_000, datMtimeMs: 1_000 };
+    expect(isPatchSignalDismissed(dismissed, 2_000, 1_500)).toBe(false);
+  });
+
+  it('ignores a malformed stored record', () => {
+    expect(isPatchSignalDismissed({ exeMtimeMs: NaN, datMtimeMs: 1_000 }, NaN, 1_000)).toBe(false);
   });
 });

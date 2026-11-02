@@ -29,6 +29,32 @@ export function isPatchNeeded(exeMtimeMs: number | null, datMtimeMs: number | nu
 }
 
 /**
+ * A proactive patch run that ends with verdict 'proceed' DISPROVES the mtime
+ * signal that triggered it: the dat never changed, so nothing was pending and
+ * exe-newer-than-dat is just how this install looks (common on non-Steam
+ * installs, where only ArenaNet's patcher ever touches either file). Since
+ * 'proceed' leaves both mtimes untouched, the signal would otherwise re-fire
+ * on every launch — running a visible vanilla launcher the user can log into,
+ * then killing their session at teardown. The caller records the disproved
+ * (exe, dat) pair and skips the proactive run while it still holds; any real
+ * update changes one of the two mtimes and re-arms the check.
+ */
+export interface DismissedPatchSignal {
+  exeMtimeMs: number;
+  datMtimeMs: number;
+}
+
+export function isPatchSignalDismissed(
+  dismissed: DismissedPatchSignal | null | undefined,
+  exeMtimeMs: number,
+  datMtimeMs: number,
+): boolean {
+  if (!dismissed) return false;
+  if (!Number.isFinite(dismissed.exeMtimeMs) || !Number.isFinite(dismissed.datMtimeMs)) return false;
+  return dismissed.exeMtimeMs === exeMtimeMs && dismissed.datMtimeMs === datMtimeMs;
+}
+
+/**
  * Reactive patch recovery. The mtime heuristic above can't see a pending
  * ArenaNet update — an available update doesn't touch any local file until the
  * patcher actually runs — so an `-autologin` launch can still crash with

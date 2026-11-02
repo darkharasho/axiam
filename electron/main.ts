@@ -27,6 +27,8 @@ import {
   patchActuallyRan,
   createStabilityState,
   stepStability,
+  isPatchSignalDismissed,
+  type DismissedPatchSignal,
   type StabilityConfig,
 } from './patchDetector.js';
 import { quitWatcher } from './quitWatcher.js';
@@ -721,8 +723,21 @@ async function runPatcherIfNeeded(id: string, installDir: string): Promise<boole
     return false;
   }
 
+  // A prior run already disproved this exact mtime pair ('proceed' below):
+  // nothing was pending, exe-newer-than-dat is just how this install looks.
+  // Skipping here is what stops the every-launch vanilla run that killed the
+  // user's session at teardown. Any real update changes a mtime and re-arms.
+  const dismissed = store.get('dismissedPatchSignal') as DismissedPatchSignal | undefined;
+  if (exeMtime != null && datMtime != null && isPatchSignalDismissed(dismissed, exeMtime, datMtime)) {
+    logMain('launch', `[patch] account=${id} exe-newer-than-dat signal already disproved for this mtime pair; skipping patcher run`);
+    return false;
+  }
+
   logMain('launch', `[patch] account=${id} Gw2.dat looks stale (exe newer than dat); running patcher`);
-  await runPatcher(id, installDir);
+  const verdict = await runPatcher(id, installDir);
+  if (verdict === 'proceed' && exeMtime != null && datMtime != null) {
+    store.set('dismissedPatchSignal', { exeMtimeMs: exeMtime, datMtimeMs: datMtime } satisfies DismissedPatchSignal);
+  }
   return true;
 }
 
