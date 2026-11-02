@@ -13,6 +13,7 @@ import crypto from 'crypto';
 import os from 'os';
 import { LaunchStateMachine } from './launchStateMachine.js';
 import { buildManagedLaunchArgs } from './launchArgs.js';
+import { resolveGw2ExecutablePath } from './gw2Path.js';
 import { hasLocalDat, deleteLocalDat, getSteamLibraryPaths, migrateLegacyLocalDat, installSnapshotToHost, snapshotHostToAccount } from './localDat.js';
 import { migrateGw2DirToJunction, repointJunction } from './junction.js';
 import * as launchSerializer from './launchSerializer.js';
@@ -646,8 +647,9 @@ const PATCH_RECOVERY_WATCH_WINDOW_MS = 30_000;
  * which case the caller skips patch detection entirely.
  */
 function resolveGw2InstallDir(gw2Path?: string): string | null {
-  if (gw2Path && fs.existsSync(gw2Path)) {
-    return path.dirname(gw2Path);
+  const configuredExe = resolveGw2ExecutablePath(gw2Path);
+  if (configuredExe) {
+    return path.dirname(configuredExe);
   }
   const located = autoLocateGw2ExecutablePath();
   if (located.found && located.path && fs.existsSync(located.path)) {
@@ -865,8 +867,10 @@ function getFirstExistingPath(candidates: string[]): string | null {
 
 function autoLocateGw2ExecutablePath(): { found: boolean; path?: string; message: string } {
   const settings = store.get('settings') as { gw2Path?: string } | undefined;
-  const configured = settings?.gw2Path?.trim();
-  if (configured && fs.existsSync(configured)) {
+  // A configured install DIRECTORY resolves to the exe inside it; a configured
+  // directory with no exe falls through to the platform candidates below.
+  const configured = resolveGw2ExecutablePath(settings?.gw2Path);
+  if (configured) {
     return { found: true, path: configured, message: 'Using configured executable path.' };
   }
 
@@ -1889,11 +1893,27 @@ async function doLaunch(id: string, options?: { allowRecovery?: boolean }): Prom
   let gw2Path = launchSettings?.gw2Path?.trim();
   const useJunction = process.platform === 'win32' && launchSettings.junctionMultiInstance === true;
 
-  if (gw2Path && !fs.existsSync(gw2Path)) {
-    console.error(`GW2 path does not exist: ${gw2Path}`);
-    logMainError('launch', `GW2 path does not exist for account=${id}: ${gw2Path}`);
-    launchStateMachine.setState(id, 'errored', 'verified', 'GW2 path missing');
-    return false;
+  if (gw2Path) {
+    // The setting may hold the install directory rather than the exe; spawning
+    // a directory on Windows fails only asynchronously, which left the launch
+    // stuck until the 90s process-wait flipped it to ERRORED. Resolve to the
+    // actual executable up front and fail loudly if there isn't one.
+    const resolvedExe = resolveGw2ExecutablePath(gw2Path);
+    if (!resolvedExe) {
+      console.error(`GW2 executable not found at configured path: ${gw2Path}`);
+      logMainError('launch', `GW2 executable not found for account=${id}: ${gw2Path}`);
+      launchStateMachine.setState(
+        id,
+        'errored',
+        'verified',
+        'No GW2 executable at the configured path. Check the Guild Wars 2 path in Settings.',
+      );
+      return false;
+    }
+    if (resolvedExe !== gw2Path) {
+      logMain('launch', `[path] Configured GW2 path is a directory; resolved to ${resolvedExe}`);
+    }
+    gw2Path = resolvedExe;
   }
 
   // On Windows, prefer direct-executable launch so -shareArchive works across
