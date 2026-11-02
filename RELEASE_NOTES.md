@@ -1,5 +1,11 @@
 # Release Notes
 
+Version v1.5.3 — November 2, 2026
+
+## Fixes
+
+- AxiAM no longer launches the game twice. On some installs it thought a patch was needed before every launch, opened the plain GW2 launcher first, then killed it (and any game session you'd started in it) after 20–30 seconds and launched again. It now remembers when that patch check turned out to be a false alarm and skips it, so you get one launch. A real game update still re-triggers the check.
+
 Version v1.5.2 — November 2, 2026
 
 ## Fixes
