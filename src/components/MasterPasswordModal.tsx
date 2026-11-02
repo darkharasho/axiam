@@ -22,11 +22,11 @@ const MasterPasswordModal: React.FC<MasterPasswordModalProps> = ({ mode, onSubmi
 
     return (
         <div
-            className="flex-1 flex flex-col items-center justify-center p-6"
-            // This pane IS the page while the vault is locked, so it paints the
-            // ground as two longhands: the `background` shorthand would reset
-            // background-image to none and throw away a theme's atmosphere.
-            style={{ backgroundColor: 'var(--axi-ground)', backgroundImage: 'var(--axi-ground-image)' }}
+            // `relative` is load-bearing: the fixed .am-mark behind this pane is a
+            // positioned box, so an unpositioned pane would paint under it. The pane
+            // stays transparent — .axi-window already paints the ground — so the
+            // mark shows around the card instead of being blotted out.
+            className="relative flex-1 flex flex-col items-center justify-center p-6"
         >
             <div className="axi-panel flex flex-col items-center" style={{ maxWidth: 320, width: '100%' }}>
                 <div
