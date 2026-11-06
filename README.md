@@ -80,7 +80,9 @@ RELEASE_NOTES_AUTO_APPROVE=1
 
 ### Unsigned test builds (not recommended)
 ```bash
-npx electron-builder --win -c.win.azureSignOptions=null --publish never
+npm pkg delete build.win.azureSignOptions   # drop the Azure signing config
+npx electron-builder --win --publish never
+git checkout package.json                   # put it back
 ```
 Use this only for local testing. Unsigned Windows binaries are expected to be flagged.
 
