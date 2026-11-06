@@ -53,11 +53,19 @@ Set `GITHUB_TOKEN` (or `GH_TOKEN`) and `OPENAI_API_KEY`:
 ```bash
 npm run build:github
 ```
-For Windows trust, also configure code signing in your environment:
-- `CSC_LINK`: path/URL/base64 for your `.p12`/`.pfx` signing certificate
-- `CSC_KEY_PASSWORD` (or `WIN_CSC_KEY_PASSWORD`): certificate password
-
-Without signing, Windows Smart App Control and SmartScreen will commonly block the installer.
+### Windows signing
+Tagged releases (`.github/workflows/release.yml`) sign the Windows installer with
+**Azure Artifact Signing** (`build.win.azureSignOptions` in `package.json`): account
+`darkharasho-signing`, profile `public-trust`, publisher `Michael Stephens`.
+electron-builder reads `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`
+from the repo secrets, and the workflow fails if the installer's Authenticode signature
+isn't valid. To set the secrets (the client secret comes from 1Password and expires
+2028-11-05):
+```bash
+~/.claude/templates/windows-signing/set-azure-signing-secrets.sh axiam
+```
+A local Windows build needs the same three variables to sign. Without signing, Windows
+Smart App Control and SmartScreen will commonly block the installer.
 
 ### Bump version + publish (patch/minor/major)
 ```bash
@@ -72,7 +80,7 @@ RELEASE_NOTES_AUTO_APPROVE=1
 
 ### Unsigned test builds (not recommended)
 ```bash
-AXIAM_ALLOW_UNSIGNED_WINDOWS=1 npm run build:github
+npx electron-builder --win -c.win.azureSignOptions=null --publish never
 ```
 Use this only for local testing. Unsigned Windows binaries are expected to be flagged.
 
