@@ -48,6 +48,7 @@ interface Api {
     setLastSeenVersion: (version: string) => Promise<boolean>;
     openExternal: (url: string) => Promise<boolean>;
     exportDiagnostics: () => Promise<{ success: boolean; path?: string; message: string }>;
+    onAccountQuit: (callback: (accountId: string) => void) => () => void;
     onUpdateMessage: (callback: (value: string) => void) => () => void;
     onUpdateAvailable: (callback: (value: unknown) => void) => () => void;
     onUpdateNotAvailable: (callback: (value: unknown) => void) => () => void;

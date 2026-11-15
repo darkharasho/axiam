@@ -1432,6 +1432,10 @@ app.on('ready', async () => {
     if (currentPhase === 'running' || currentPhase === 'process_detected' || currentPhase === 'errored') {
       launchStateMachine.setState(accountId, 'stopped', 'verified', 'Process exited');
     }
+    // Tell the window right away instead of waiting out its own miss polls.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('account-quit', accountId);
+    }
 
     const settings = (store.get('settings') as AppSettings | undefined) || {} as AppSettings;
     // Junction mode: GW2 wrote in place into the account's profile dir via

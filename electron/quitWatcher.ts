@@ -19,7 +19,9 @@ import { EventEmitter } from 'events';
  *     system process table.
  *   - Liveness-based (Linux/Proton): configure(poller, ms, livenessPoller) —
  *     fires when an account's mumble tag is absent for QUIT_GRACE_POLLS
- *     consecutive polls, absorbing the one-time re-exec gap after launch.
+ *     consecutive polls during the first LAUNCH_GRACE_MS after launch
+ *     (absorbing the one-time startup re-exec gap), and on the first absent
+ *     poll after that, so a normal quit is noticed within one poll.
  *
  * Polling uses injected pollers so tests can drive the watcher
  * deterministically without spawning real processes.
@@ -30,9 +32,14 @@ export type AccountLivenessPoller = () => Set<string>;
 
 // One re-exec gap is a single absent poll; 3 gives 2 polls of buffer beyond it.
 const QUIT_GRACE_POLLS = 3;
+// GW2's launcher re-execs into the game ~14s after launch. Past this window
+// there is no expected gap, so one absent poll means the session ended.
+export const LAUNCH_GRACE_MS = 90_000;
 
 class QuitWatcher extends EventEmitter {
   private bindings = new Map<string, number>();
+  private launchedAt = new Map<string, number>();
+  private now: () => number = Date.now;
   private absentPolls = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   private poller: PidPoller = () => [];
@@ -64,11 +71,13 @@ class QuitWatcher extends EventEmitter {
 
   noteLaunch(accountId: string, pid: number): void {
     this.bindings.set(accountId, pid);
+    this.launchedAt.set(accountId, this.now());
     this.absentPolls.delete(accountId);
   }
 
   noteStop(accountId: string): void {
     this.bindings.delete(accountId);
+    this.launchedAt.delete(accountId);
     this.absentPolls.delete(accountId);
   }
 
@@ -84,8 +93,9 @@ class QuitWatcher extends EventEmitter {
   }
 
   /** Linux: an account is "alive" while any process still carries its mumble
-   *  tag. Fire quit only after QUIT_GRACE_POLLS consecutive absent polls so a
-   *  single startup re-exec gap isn't mistaken for a quit. */
+   *  tag. Near launch, fire quit only after QUIT_GRACE_POLLS consecutive absent
+   *  polls so the startup re-exec gap isn't mistaken for a quit; after
+   *  LAUNCH_GRACE_MS, the first absent poll fires. */
   private tickLiveness(live: Set<string>): void {
     for (const accountId of Array.from(this.bindings.keys())) {
       if (live.has(accountId)) {
@@ -93,8 +103,12 @@ class QuitWatcher extends EventEmitter {
         continue;
       }
       const absent = (this.absentPolls.get(accountId) ?? 0) + 1;
-      if (absent >= QUIT_GRACE_POLLS) {
+      const launchedAt = this.launchedAt.get(accountId) ?? 0;
+      const inLaunchGrace = this.now() - launchedAt < LAUNCH_GRACE_MS;
+      const requiredPolls = inLaunchGrace ? QUIT_GRACE_POLLS : 1;
+      if (absent >= requiredPolls) {
         this.bindings.delete(accountId);
+        this.launchedAt.delete(accountId);
         this.absentPolls.delete(accountId);
         this.emit('quit', accountId);
       } else {
@@ -109,6 +123,7 @@ class QuitWatcher extends EventEmitter {
     for (const [accountId, pid] of Array.from(this.bindings.entries())) {
       if (!livePids.has(pid)) {
         this.bindings.delete(accountId);
+        this.launchedAt.delete(accountId);
         this.emit('quit', accountId);
       }
     }
@@ -120,8 +135,15 @@ class QuitWatcher extends EventEmitter {
   __resetForTests(): void {
     this.stop();
     this.bindings.clear();
+    this.launchedAt.clear();
+    this.now = Date.now;
     this.absentPolls.clear();
     this.livenessPoller = null;
+  }
+
+  /** Test helper: replace the clock used for the launch grace window. */
+  __setClockForTests(now: () => number): void {
+    this.now = now;
   }
 }
 

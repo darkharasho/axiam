@@ -451,8 +451,15 @@ function App() {
         const timer = window.setInterval(() => {
             refreshActiveProcesses();
         }, 3000);
+        // The main process has already confirmed the quit, so skip the miss
+        // threshold: the next refresh that doesn't see the account drops it.
+        const removeQuitListener = window.api.onAccountQuit((accountId) => {
+            processMissCountsRef.current[accountId] = ACTIVE_PROCESS_MISS_THRESHOLD;
+            refreshActiveProcesses();
+        });
         return () => {
             window.clearInterval(timer);
+            removeQuitListener();
         };
     }, [isUnlocked]);
 

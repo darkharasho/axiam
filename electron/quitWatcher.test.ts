@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { quitWatcher } from './quitWatcher.js';
+import { LAUNCH_GRACE_MS, quitWatcher } from './quitWatcher.js';
 
 describe('quitWatcher', () => {
   beforeEach(() => {
@@ -131,6 +131,38 @@ describe('quitWatcher', () => {
     quitWatcher.tick();
     quitWatcher.tick();
     quitWatcher.tick();
+    expect(events).toEqual([]);
+  });
+
+  it('linux: after the launch grace window, the first absent poll fires quit', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    let clock = 1_000_000;
+    quitWatcher.__setClockForTests(() => clock);
+    let live = new Set(['acc-a']);
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    clock += LAUNCH_GRACE_MS;
+    quitWatcher.tick();                 // present
+    live = new Set<string>();
+    quitWatcher.tick();                 // absent 1, past grace -> fire
+    expect(events).toEqual(['acc-a']);
+  });
+
+  it('linux: a re-exec gap just inside the launch grace window does not fire', () => {
+    const events: string[] = [];
+    quitWatcher.on('quit', (id: string) => events.push(id));
+    let clock = 1_000_000;
+    quitWatcher.__setClockForTests(() => clock);
+    let live = new Set<string>();
+    quitWatcher.configure(() => [], 100, () => live);
+    quitWatcher.noteLaunch('acc-a', 1000);
+
+    clock += LAUNCH_GRACE_MS - 1;
+    quitWatcher.tick();                 // absent 1, still in grace
+    live = new Set(['acc-a']);
+    quitWatcher.tick();                 // back under the new pid
     expect(events).toEqual([]);
   });
 });
