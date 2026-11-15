@@ -1,5 +1,15 @@
 # Release Notes
 
+Version v1.5.4 — November 14, 2026
+
+## Fixes
+
+- AxiAM notices you've closed GW2 much faster. Before, the account card could sit on "running" for 5–9 seconds after the game was gone. Now it flips to stopped within a couple of seconds. The longer wait still applies for the first 90 seconds after a launch, while GW2 restarts itself into the game.
+
+## Signed Windows builds
+
+The Windows installer and app are now code signed, with Michael Stephens as the publisher. Windows should stop warning that the app comes from an unknown publisher.
+
 Version v1.5.3 — November 2, 2026
 
 ## Fixes
